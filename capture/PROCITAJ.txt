@@ -1,0 +1,6 @@
+1. Raspakuj ceo ZIP i dvaput klikni na Snimi Mafia III.cmd.
+2. Kad ucitas snimljenu igru, hodaj ili okreni kameru i pritisni F12 jednom.
+3. Izadji iz igre i sacekaj da se u folderu pojavi Mafia III rezultat.txt.
+
+Posalji Mafia III rezultat.txt. RenderDoc snimak ostaje u folderu Snimci.
+Ako pokretac ne pronadje igru, otvara prozor za izbor njenog EXE fajla.

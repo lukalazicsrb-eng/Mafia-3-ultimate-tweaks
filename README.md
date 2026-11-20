@@ -4,6 +4,8 @@ This repository follows development of AMD FSR Upscaling 4.1.2 for Modern Tweaks
 
 AMD officially supports FSR Upscaling 4.1.2 on the Radeon RX 6700 XT through Direct3D 12 or Vulkan. The supplied D3D11 mod locates the game's TAA pass and prepares temporal inputs for NVIDIA DLAA. Its DLAA path exits on non-NVIDIA adapters before loading NGX and creates the feature at equal input and output sizes. An FSR implementation needs access to that render stage on AMD, control of the internal 3D resolution, and an output handoff before HUD composition. [AMD SDK requirements](https://gpuopen.com/amd-fsr-sdk/#requirements)
 
+The standalone Windows probe selected FSR Upscaling 4.1.2 on a Radeon RX 6700 XT and passed both synthetic frame checks through the D3D11–D3D12 bridge. [Verification status](docs/fsr-feasibility.md#verification-status)
+
 [Technical report and disassembly findings](docs/fsr-feasibility.md) · [Windows bridge probe](probe/README.md)
 
 ## Reproduce the static audit

@@ -2,7 +2,7 @@
 
 This console program is a standalone hardware test for the proposed Mafia III rendering bridge. It creates D3D11 and D3D12 devices on the same hardware adapter, prefers an AMD adapter, and prints AMD's selected upscaler and numeric provider ID. It runs two FSR dispatches on a stationary 320×180 synthetic input and checks that the 640×360 output can be read on D3D11. The two queues share textures and a GPU fence. The test uses a CPU readback to check two sample pixels.
 
-The executable runs outside the game. Windows GPU execution and the bridge's behavior with actual Mafia III frames still need validation. [Technical report](https://github.com/lukalazicsrb-eng/Mafia-3-ultimate-tweaks/blob/main/docs/fsr-feasibility.md)
+The executable runs outside the game. A Windows run on a Radeon RX 6700 XT selected AMD FSR 4.1.2 and passed both synthetic output checks. The bridge's behavior with actual Mafia III frames still needs validation. [Technical report](../docs/fsr-feasibility.md)
 
 ## Run on Windows x64
 
