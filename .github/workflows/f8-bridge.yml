@@ -29,3 +29,14 @@ jobs:
         run: cmake --build build-f8 --config Release
       - name: Test F8 selection logic
         run: ctest --test-dir build-f8 -C Release --output-on-failure
+      - name: Upload experimental Windows x64 build (NOT game-ready)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: F8-experimental-x64-NOT-INSTALLABLE
+          path: |
+            build-f8/Release/mafia_f8_experimental.dll
+            build-f8/Release/test_mafia_menu_state.exe
+            f8_bridge/README.md
+          if-no-files-found: error
+          retention-days: 14
