@@ -36,7 +36,7 @@ bool sha256(const wchar_t* path,std::wstring& hex) {
         if(alg) BCryptCloseAlgorithmProvider(alg,0);
     };
     if(BCryptOpenAlgorithmProvider(&alg,BCRYPT_SHA256_ALGORITHM,nullptr,0)<0) return false;
-    if(BCryptCreateHash(alg,&hash,nullptr,0,nullptr,0,0,0)<0) {close();return false;}
+    if(BCryptCreateHash(alg,&hash,nullptr,0,nullptr,0,0)<0) {close();return false;}
     std::ifstream in(path,std::ios::binary);
     if(!in) {close();return false;}
     std::array<char,65536> buf{};
