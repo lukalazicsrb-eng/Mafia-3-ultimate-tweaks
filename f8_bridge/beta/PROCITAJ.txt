@@ -1,0 +1,40 @@
+# Mafia III experimental F8 menu compatibility test (Windows x64)
+
+**THIS IS NOT FUNCTIONAL FSR 4.1.2.** The program checks whether a newly compiled
+DirectInput proxy can load the preserved original Modern Tweaks 2.5.1 and append
+four **disabled** FSR choices to the existing **F8 > Visuals > anti-aliasing**
+ImGui combo. No game-frame AMD FSR processing exists in this beta.
+
+Your game must already have the exact Modern Tweaks 2.5.1 dinput8.dll with SHA256
+529b16daec59e2ce5c735e5c8e7974662b647591da2847c53a16f165a479e900.
+Installation checks that hash and will not overwrite unknown game mods.
+
+## Test steps
+1. Completely exit Mafia III. Keep Steam installed and start the game through Steam.
+2. Extract this package outside the game directory.
+3. Run "Instaliraj beta test.cmd", paste the game directory, and explicitly type TEST.
+4. Launch Mafia III normally from Steam. Verify usual Modern Tweaks features are still there.
+5. Press F8, go to Visuals, and open the AA selection dropdown.
+6. See if "FSR 4.1.2 Native AA [unavailable]" plus Quality, Balanced,
+   Performance appear. They should NOT be usable; this tests the original F8
+   menu hook only and avoids claiming FSR runs.
+7. Exit the game normally. Send MafiaF8_loader.log, ModernTweaks.log and a
+   screenshot of the anti-aliasing dropdown. Mention any crash/Steam error.
+8. Run "Vrati originalni mod.cmd" to restore the original original DLL.
+   You can also manually restore dinput8.ModernTweaks.2.5.1.bak to dinput8.dll
+   with the game closed if the uninstall script is unavailable.
+
+This package does NOT include the original third-party Modern Tweaks binary.
+Steam should be running and should launch the game. If the game stops opening
+after installation, restore the original DLL immediately.
+
+## Implementation
+The proxy builds as dinput8.dll. It loads game-local ModernTweaks_original.dll
+on a worker outside DllMain, forwards DirectInput8Create, and optionally loads
+mafia_f8_experimental.dll from the same directory. The adapter validates the
+original full file SHA-256 and the exact AA call-site before installing a
+version-specific call redirect. The original binary is not patched on disk.
+
+**UNVERIFIED:** game boot, plugin initialization order, safety of instruction
+patch with concurrently executing render threads, actual menu behavior. This
+beta is opt-in, may be unstable, and is intended for a reversible test only.
