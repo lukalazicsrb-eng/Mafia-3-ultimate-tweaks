@@ -1,0 +1,31 @@
+name: Experimental F8 bridge build and policy tests
+on:
+  push:
+    paths:
+      - 'f8_bridge/**'
+      - 'tools/verify_f8_site.py'
+      - '.github/workflows/f8-bridge.yml'
+  pull_request:
+    paths:
+      - 'f8_bridge/**'
+      - 'tools/verify_f8_site.py'
+      - '.github/workflows/f8-bridge.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Windows x64
+        if: runner.os == 'Windows'
+        run: cmake -S f8_bridge -B build-f8 -A x64
+      - name: Configure Linux
+        if: runner.os != 'Windows'
+        run: cmake -S f8_bridge -B build-f8
+      - name: Build
+        run: cmake --build build-f8 --config Release
+      - name: Test F8 selection logic
+        run: ctest --test-dir build-f8 -C Release --output-on-failure
