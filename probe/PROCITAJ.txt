@@ -1,0 +1,8 @@
+1. Raspakuj ceo ZIP.
+2. Dvaput klikni na Pokreni FSR test.cmd.
+
+Pri prvom pokretanju skripta sama priprema potrebne datoteke.
+Kada se test zavrsi, u istom folderu nastaje FSR rezultat.txt.
+Posalji taj fajl ako zelis da proverimo rezultat.
+
+Test se pokrece iz ovog foldera, izvan Mafia III.

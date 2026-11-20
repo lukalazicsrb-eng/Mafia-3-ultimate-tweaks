@@ -6,13 +6,10 @@ The executable runs outside the game. Windows GPU execution and the bridge's beh
 
 ## Run on Windows x64
 
-1. Download and extract [AMD FSR SDK 2.4.0](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/releases/tag/v2.4.0). Keep `amd_fidelityfx_loader_dx12.dll` and `amd_fidelityfx_upscaler_dx12.dll` together inside the SDK's `Kits\FidelityFX\signedbin` directory.
-2. Download the official [DirectX 12 Agility SDK 1.616.1 NuGet package](https://www.nuget.org/packages/Microsoft.Direct3D.D3D12/1.616.1). It is a ZIP archive with a `.nupkg` extension. Extract `build\native\bin\x64\D3D12Core.dll` to `D3D12\D3D12Core.dll` next to `fsr-interop-probe.exe`.
-3. On Windows 10 or 11 with an up-to-date AMD driver, run the probe from PowerShell. Replace the path with the SDK directory you extracted.
+1. Extract the entire Windows ZIP.
+2. Double-click `Pokreni FSR test.cmd`. The launcher prepares the runtime, runs the probe, and writes `FSR rezultat.txt` in the same folder.
 
-```powershell
-.\fsr-interop-probe.exe 'C:\SDK\FidelityFX-SDK-2.4.0\Kits\FidelityFX\signedbin'
-```
+The first run needs an internet connection. The launcher checks for `FidelityFX-SDK-2.4.0.zip` beside it and in Downloads, verifies SHA-256 hashes, and fetches missing files from AMD and Microsoft's official packages. The executable uses stable Agility SDK 1.616.1. [AMD FSR SDK 2.4.0](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/releases/tag/v2.4.0) · [Microsoft Agility SDK 1.616.1](https://www.nuget.org/packages/Microsoft.Direct3D.D3D12/1.616.1)
 
 Read the `Selected upscaler` line to see what AMD actually created. A `4.1.2` result or newer followed by `Bridge check passed` verifies the ML provider and both synthetic output checks on that machine. A `3.1.6` result identifies the analytical provider. A successful analytical run verifies the bridge only for that provider. The process returns `0` on bridge success, `1` for initialization, dispatch, synchronization, or output-check errors, and `2` for incorrect command-line usage. Report the adapter, provider, sample values, and any failure text when sharing results. [AMD hardware requirements](https://gpuopen.com/amd-fsr-sdk/#requirements)
 
@@ -26,4 +23,4 @@ cmake --build build --config Release
 cmake --install build --config Release --prefix package
 ```
 
-Builds include the probe and this guide. Obtain the AMD and Microsoft runtime binaries from their official packages.
+The installed folder includes the executable, launcher, and short instructions in `PROCITAJ.txt`.

@@ -5,6 +5,8 @@ on:
     paths:
       - .github/workflows/fsr-probe.yml
       - probe/**
+    tags:
+      - fsr-test-v*
   pull_request:
     paths:
       - .github/workflows/fsr-probe.yml
@@ -55,9 +57,45 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Expected usage exit code 2, got $LASTEXITCODE" }
           exit 0
 
+      - name: Check first launch and cached runtimes with Windows PowerShell
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'FSR test Windows'
+          Copy-Item package $stage -Recurse
+          $script = Join-Path $stage 'run-probe.ps1'
+          powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $script -PrepareOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Preparing the runtime failed' }
+          powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $script -PrepareOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Preparing the cached runtime failed' }
+          exit 0
+
       - name: Upload Windows x64 build
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: fsr-interop-probe-windows-x64
+          name: FSR-test-za-Windows
           path: package/
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/fsr-test-v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download the verified build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: FSR-test-za-Windows
+          path: package
+
+      - name: Publish the Windows ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip -j FSR-test-za-Windows.zip package/*
+          gh release create "$GITHUB_REF_NAME" FSR-test-za-Windows.zip \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --latest=false \
+            --title 'FSR test za Windows' \
+            --notes 'Raspakuj ceo ZIP i pokreni Pokreni FSR test.cmd. Rezultat se cuva kao FSR rezultat.txt. Ovo je proba na sintetickim frejmovima, izvan igre Mafia III.'

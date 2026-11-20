@@ -29,4 +29,4 @@ elseif(MINGW)
 endif()
 
 install(TARGETS fsr-interop-probe RUNTIME DESTINATION .)
-install(FILES README.md DESTINATION .)
+install(FILES "Pokreni FSR test.cmd" run-probe.ps1 PROCITAJ.txt DESTINATION .)
