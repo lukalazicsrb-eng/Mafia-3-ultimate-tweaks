@@ -6,3 +6,6 @@ Kada se test zavrsi, u istom folderu nastaje FSR rezultat.txt.
 Posalji taj fajl ako zelis da proverimo rezultat.
 
 Test se pokrece iz ovog foldera, izvan Mafia III.
+
+Proveri formate Mafia III.cmd radi prvo Native AA testiranje u rezoluciji 2560x1440
+sa teksturama istog formata kao u igri. Rezultat se cuva u Mafia III FSR formati.txt.

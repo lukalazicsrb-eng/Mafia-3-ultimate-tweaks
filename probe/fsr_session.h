@@ -9,11 +9,32 @@ struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
 struct ID3D12Resource;
 
+struct FsrContextFlags {
+    bool linearHdr = false;
+    bool invertedDepth = false;
+    bool infiniteDepth = false;
+    bool motionIncludesJitter = false;
+};
+
+struct FsrFrameParameters {
+    float jitterX;
+    float jitterY;
+    float motionScaleX;
+    float motionScaleY;
+    float frameTimeMs;
+    float preExposure;
+    float cameraNear;
+    float cameraFar;
+    float verticalFov;
+    float viewSpaceToMeters;
+    bool reset;
+};
+
 class FsrSession final {
 public:
     FsrSession(ID3D12Device* device, const std::filesystem::path& runtimeDirectory,
         std::uint32_t renderWidth, std::uint32_t renderHeight,
-        std::uint32_t outputWidth, std::uint32_t outputHeight);
+        std::uint32_t outputWidth, std::uint32_t outputHeight, FsrContextFlags flags = {});
     // The caller must retire submitted dispatches before destroying the session.
     ~FsrSession();
 
@@ -23,10 +44,9 @@ public:
     const std::string& providerName() const noexcept;
 
     // The caller supplies compute-readable inputs and a UAV-ready output.
-    // The fixture has a stationary scene and uses zero jitter and zero motion.
     void dispatch(ID3D12GraphicsCommandList* commands, ID3D12Resource* color,
         ID3D12Resource* depth, ID3D12Resource* motion, ID3D12Resource* output,
-        bool reset);
+        const FsrFrameParameters& parameters);
 
 private:
     struct Impl;

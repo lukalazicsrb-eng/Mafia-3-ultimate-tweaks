@@ -57,6 +57,13 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Expected usage exit code 2, got $LASTEXITCODE" }
           exit 0
 
+      - name: Check Mafia III texture conversions on D3D11 WARP
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE/package/fsr-interop-probe.exe" --verify-game-conversion
+          if ($LASTEXITCODE -ne 0) { throw 'D3D11 game texture conversion failed' }
+          exit 0
+
       - name: Check first launch and cached runtimes with Windows PowerShell
         shell: pwsh
         run: |
@@ -98,4 +105,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" FSR-test-za-Windows.zip \
             --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --latest=false \
             --title 'FSR test za Windows' \
-            --notes 'Raspakuj ceo ZIP i pokreni Pokreni FSR test.cmd. Rezultat se cuva kao FSR rezultat.txt. Ovo je proba na sintetickim frejmovima, izvan igre Mafia III.'
+            --notes 'Pokreni Proveri formate Mafia III.cmd za Native AA probu 2560x1440 sa formatima iz igre. Rezultat se cuva kao Mafia III FSR formati.txt. Proba koristi sinteticke frejmove izvan igre.'

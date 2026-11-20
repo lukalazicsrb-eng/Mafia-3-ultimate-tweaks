@@ -7,6 +7,7 @@
 #include <dx12/ffx_api_dx12.h>
 #include <ffx_upscale.h>
 
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -136,7 +137,7 @@ struct FsrSession::Impl {
 
 FsrSession::FsrSession(ID3D12Device* device, const std::filesystem::path& runtimeDirectory,
     std::uint32_t renderWidth, std::uint32_t renderHeight,
-    std::uint32_t outputWidth, std::uint32_t outputHeight)
+    std::uint32_t outputWidth, std::uint32_t outputHeight, FsrContextFlags flags)
     : impl_(std::make_unique<Impl>(runtimeDirectory)) {
     if (device == nullptr || renderWidth == 0 || renderHeight == 0
         || outputWidth < renderWidth || outputHeight < renderHeight) {
@@ -159,6 +160,14 @@ FsrSession::FsrSession(ID3D12Device* device, const std::filesystem::path& runtim
     upscale.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE;
     upscale.header.pNext = &backend.header;
     upscale.flags = FFX_UPSCALE_ENABLE_AUTO_EXPOSURE | FFX_UPSCALE_ENABLE_DEBUG_CHECKING;
+    if (flags.linearHdr)
+        upscale.flags |= FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
+    if (flags.invertedDepth)
+        upscale.flags |= FFX_UPSCALE_ENABLE_DEPTH_INVERTED;
+    if (flags.infiniteDepth)
+        upscale.flags |= FFX_UPSCALE_ENABLE_DEPTH_INFINITE;
+    if (flags.motionIncludesJitter)
+        upscale.flags |= FFX_UPSCALE_ENABLE_MOTION_VECTORS_JITTER_CANCELLATION;
     upscale.maxRenderSize = {renderWidth, renderHeight};
     upscale.maxUpscaleSize = {outputWidth, outputHeight};
     upscale.fpMessage = logMessage;
@@ -186,9 +195,22 @@ const std::string& FsrSession::providerName() const noexcept {
 }
 
 void FsrSession::dispatch(ID3D12GraphicsCommandList* commands, ID3D12Resource* color,
-    ID3D12Resource* depth, ID3D12Resource* motion, ID3D12Resource* output, bool reset) {
+    ID3D12Resource* depth, ID3D12Resource* motion, ID3D12Resource* output,
+    const FsrFrameParameters& parameters) {
     if (commands == nullptr || color == nullptr || depth == nullptr || motion == nullptr || output == nullptr) {
         throw std::runtime_error("An FSR dispatch is missing a command list or a required texture.");
+    }
+
+    const auto positiveFinite = [](float value) { return std::isfinite(value) && value > 0.0f; };
+    const bool infiniteDepth = (impl_->upscaleDesc.flags & FFX_UPSCALE_ENABLE_DEPTH_INFINITE) != 0;
+    if (!std::isfinite(parameters.jitterX) || !std::isfinite(parameters.jitterY)
+        || !std::isfinite(parameters.motionScaleX) || !std::isfinite(parameters.motionScaleY)
+        || !positiveFinite(parameters.frameTimeMs) || !positiveFinite(parameters.preExposure)
+        || !positiveFinite(parameters.cameraNear) || !(parameters.cameraFar > parameters.cameraNear)
+        || (!infiniteDepth && !std::isfinite(parameters.cameraFar))
+        || !positiveFinite(parameters.verticalFov) || parameters.verticalFov >= 3.141592654f
+        || !positiveFinite(parameters.viewSpaceToMeters)) {
+        throw std::runtime_error("The FSR frame has invalid temporal or camera parameters.");
     }
 
     ffxDispatchDescUpscale frame{};
@@ -198,15 +220,16 @@ void FsrSession::dispatch(ID3D12GraphicsCommandList* commands, ID3D12Resource* c
     frame.depth = ffxApiGetResourceDX12(depth, FFX_API_RESOURCE_STATE_COMPUTE_READ);
     frame.motionVectors = ffxApiGetResourceDX12(motion, FFX_API_RESOURCE_STATE_COMPUTE_READ);
     frame.output = ffxApiGetResourceDX12(output, FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
-    frame.motionVectorScale = {1.0f, 1.0f};
+    frame.jitterOffset = {parameters.jitterX, parameters.jitterY};
+    frame.motionVectorScale = {parameters.motionScaleX, parameters.motionScaleY};
     frame.renderSize = impl_->upscaleDesc.maxRenderSize;
     frame.upscaleSize = impl_->upscaleDesc.maxUpscaleSize;
-    frame.frameTimeDelta = 1000.0f / 60.0f;
-    frame.preExposure = 1.0f;
-    frame.reset = reset;
-    frame.cameraNear = 0.1f;
-    frame.cameraFar = 100.0f;
-    frame.cameraFovAngleVertical = 1.0f;
-    frame.viewSpaceToMetersFactor = 1.0f;
+    frame.frameTimeDelta = parameters.frameTimeMs;
+    frame.preExposure = parameters.preExposure;
+    frame.reset = parameters.reset;
+    frame.cameraNear = parameters.cameraNear;
+    frame.cameraFar = parameters.cameraFar;
+    frame.cameraFovAngleVertical = parameters.verticalFov;
+    frame.viewSpaceToMetersFactor = parameters.viewSpaceToMeters;
     checkFfx(impl_->dispatch(&impl_->context, &frame.header), "Recording an AMD FSR dispatch");
 }

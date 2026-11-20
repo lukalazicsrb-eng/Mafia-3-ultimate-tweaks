@@ -12,12 +12,12 @@ if(NOT EXISTS "${fsr_kit}/api/include/ffx_api.h" OR
     message(FATAL_ERROR "Set FSR_SDK_ROOT to the root of FidelityFX-SDK v2.4.0.")
 endif()
 
-add_executable(fsr-interop-probe main.cpp fsr_session.cpp)
+add_executable(fsr-interop-probe main.cpp fsr_session.cpp game_fixture.cpp)
 target_compile_features(fsr-interop-probe PRIVATE cxx_std_17)
 target_compile_definitions(fsr-interop-probe PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_include_directories(fsr-interop-probe SYSTEM PRIVATE
     "${fsr_kit}/api/include" "${fsr_kit}/upscalers/include")
-target_link_libraries(fsr-interop-probe PRIVATE d3d11 d3d12 dxgi)
+target_link_libraries(fsr-interop-probe PRIVATE d3d11 d3d12 d3dcompiler dxgi)
 
 if(MSVC)
     set_property(TARGET fsr-interop-probe PROPERTY MSVC_RUNTIME_LIBRARY
@@ -29,4 +29,4 @@ elseif(MINGW)
 endif()
 
 install(TARGETS fsr-interop-probe RUNTIME DESTINATION .)
-install(FILES "Pokreni FSR test.cmd" run-probe.ps1 PROCITAJ.txt DESTINATION .)
+install(FILES "Pokreni FSR test.cmd" "Proveri formate Mafia III.cmd" run-probe.ps1 PROCITAJ.txt DESTINATION .)

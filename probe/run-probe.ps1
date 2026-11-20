@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$PrepareOnly)
+param([switch]$PrepareOnly, [switch]$GameFormats)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -7,7 +7,8 @@ $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $runtime = Join-Path $root 'runtime\amd'
 $d3d12Directory = Join-Path $root 'D3D12'
-$resultPath = Join-Path $root 'FSR rezultat.txt'
+$reportName = if ($GameFormats) { 'Mafia III FSR formati.txt' } else { 'FSR rezultat.txt' }
+$resultPath = Join-Path $root $reportName
 $amdArchiveName = 'FidelityFX-SDK-2.4.0.zip'
 $amdBaseUrl = 'https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/7539ae8b6568ad29ed78a753404351daf3b5cca7/Kits/FidelityFX/signedbin/'
 $agilityArchiveName = 'microsoft.direct3d.d3d12.1.616.1.nupkg'
@@ -23,6 +24,9 @@ $report = [System.Collections.Generic.List[string]]::new()
 $report.Add('Provera AMD FSR na Windows x64')
 $report.Add((Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'))
 $report.Add('Ovaj test obradjuje sinteticke frejmove izvan igre.')
+if ($GameFormats) {
+    $report.Add('Native AA 2560x1440 sa formatima boje, dubine i pokreta zabelezenim u igri.')
+}
 $report.Add('')
 
 function Write-Status([string]$Message) {
@@ -158,7 +162,11 @@ try {
         Write-Status 'Pokrecem GPU proveru. Ovo moze potrajati.'
         $stdout = Join-Path $scratch 'stdout.txt'
         $stderr = Join-Path $scratch 'stderr.txt'
-        $process = Start-Process -FilePath $probe -ArgumentList ('"' + $runtime + '"') -WorkingDirectory $root `
+        $arguments = '"' + $runtime + '"'
+        if ($GameFormats) {
+            $arguments += ' --game-formats'
+        }
+        $process = Start-Process -FilePath $probe -ArgumentList $arguments -WorkingDirectory $root `
             -RedirectStandardOutput $stdout -RedirectStandardError $stderr -NoNewWindow -Wait -PassThru
         $exitCode = $process.ExitCode
         $output = Get-Content -LiteralPath $stdout -Raw

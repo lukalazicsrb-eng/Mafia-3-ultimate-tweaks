@@ -6,6 +6,8 @@ AMD officially supports FSR Upscaling 4.1.2 on the Radeon RX 6700 XT through Dir
 
 The standalone Windows probe selected FSR Upscaling 4.1.2 on a Radeon RX 6700 XT and passed both synthetic frame checks through the D3D11–D3D12 bridge. [Verification status](docs/fsr-feasibility.md#verification-status)
 
+A gameplay diagnostic confirmed the Mafia III TAA pass at 2560×1440 with reversed depth and XY motion in UV units. The standalone Native AA probe now exercises the logged color and depth formats at that resolution. [Gameplay findings](docs/fsr-feasibility.md#confirmed-gameplay-inputs) · [Native AA probe](probe/README.md#mafia-iii-texture-profile)
+
 [Technical report and disassembly findings](docs/fsr-feasibility.md) · [Windows bridge probe](probe/README.md)
 
 ## Reproduce the static audit
