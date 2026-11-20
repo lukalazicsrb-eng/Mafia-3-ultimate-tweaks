@@ -1,3 +1,8 @@
+Za TAA dijagnostiku bez RenderDoc-a, ugasi igru i pokreni Zabelezi TAA dijagnostiku.cmd.
+Ucitaj igru, hodaj i okreci kameru oko 30 sekundi, pa izadji kroz meni igre.
+Test koristi originalni Modern Tweaks 2.5.1. Privremene postavke se vracaju po izlasku.
+Rezervna kopija postavki je u folderu Snimci za tu sesiju.
+
 Ako vec imas .rdc fajl, dvaput klikni na Obradi postojeci snimak.cmd i izaberi fajl.
 Pokretac ce pokusati da ga otvori ili izdvoji ceo prvi frejm u privremenu kopiju.
 

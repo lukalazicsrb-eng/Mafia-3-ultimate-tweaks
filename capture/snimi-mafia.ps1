@@ -1,5 +1,11 @@
 [CmdletBinding()]
-param([switch]$PrepareOnly, [switch]$TestExporter, [switch]$AnalyzeExisting)
+param(
+    [switch]$PrepareOnly,
+    [switch]$TestExporter,
+    [switch]$AnalyzeExisting,
+    [switch]$TraceMod,
+    [switch]$TestTraceSettings
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -10,7 +16,7 @@ $captureCommand = Join-Path $renderDoc 'renderdoccmd.exe'
 $captureUI = Join-Path $renderDoc 'qrenderdoc.exe'
 $report = [Collections.Generic.List[string]]::new()
 $report.Add('Mafia III - D3D11 dijagnostika')
-$report.Add('Pokretac mafia-capture-v0.1.2')
+$report.Add('Pokretac mafia-capture-v0.1.3')
 
 function Prepare-RenderDoc {
     if ((Test-Path -LiteralPath $captureCommand -PathType Leaf) -and
@@ -129,6 +135,15 @@ function Export-Capture([string]$Directory, [string]$CaptureFile) {
 
 $status = 1
 try {
+    if ($TraceMod -or $TestTraceSettings) {
+        . (Join-Path $root 'trace-mod.ps1')
+    }
+    if ($TestTraceSettings) {
+        $test = Join-Path $root 'trace-test'
+        New-Item -ItemType Directory -Path $test -Force | Out-Null
+        Test-TraceSettings $test
+        exit 0
+    }
     if ($PrepareOnly -or $TestExporter) {
         Prepare-RenderDoc
         if ($TestExporter) {
@@ -161,6 +176,11 @@ try {
             $report.Add("dinput8.dll SHA-256 $((Get-FileHash -LiteralPath $mod -Algorithm SHA256).Hash)")
         } else {
             $report.Add('dinput8.dll nije pronadjen uz igru.')
+        }
+
+        if ($TraceMod) {
+            Invoke-ModTrace $game $session $report
+            exit 0
         }
 
         Prepare-RenderDoc
@@ -197,7 +217,7 @@ try {
     $report.Add($_.Exception.Message)
     Write-Host $_.Exception.Message
 } finally {
-    if (-not ($PrepareOnly -or $TestExporter)) {
+    if (-not ($PrepareOnly -or $TestExporter -or $TestTraceSettings)) {
         $report | Set-Content -LiteralPath $result -Encoding UTF8
         Write-Host 'Posalji fajl Mafia III rezultat.txt iz foldera sa pokretacem.'
     }

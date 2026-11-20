@@ -22,6 +22,15 @@ jobs:
       - name: Check frame recovery bounds
         run: python -B tools/test_rdc_recovery.py
 
+      - name: Check Modern Tweaks settings restoration on Windows
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'Mafia III trace test'
+          Copy-Item capture $stage -Recurse
+          powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $stage 'snimi-mafia.ps1') -TestTraceSettings
+          if ($LASTEXITCODE -ne 0) { throw 'Checking settings restoration failed' }
+          exit 0
+
       - name: Check RenderDoc setup and export on Windows
         shell: pwsh
         run: |
@@ -44,4 +53,4 @@ jobs:
           gh release create $env:GITHUB_REF_NAME Snimi-Mafia-III.zip `
             --repo $env:GITHUB_REPOSITORY --verify-tag --prerelease --latest=false `
             --title 'Snimi Mafia III' `
-            --notes 'Za vec sacuvan RenderDoc fajl pokreni Obradi postojeci snimak.cmd. Za novi snimak koristi Snimi Mafia III.cmd. Posle analize se dobija Mafia III rezultat.txt.'
+            --notes 'Pokreni Zabelezi TAA dijagnostiku.cmd za dijagnostiku iz Modern Tweaks-a bez RenderDoc-a. Ucitaj igru, okreci kameru i izadji iz igre. Posle testa se dobija Mafia III rezultat.txt.'
