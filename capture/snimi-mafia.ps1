@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$PrepareOnly)
+param([switch]$PrepareOnly, [switch]$TestExporter)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -89,10 +89,48 @@ function Find-Game {
     throw 'Nijedan Mafia III EXE nije izabran.'
 }
 
+function Export-Capture([string]$Directory) {
+    # On a fresh RenderDoc setup a first-run dialog otherwise blocks --python.
+    $config = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'qrenderdoc\UI.config'
+    $createdConfig = $false
+    try {
+        if (-not (Test-Path -LiteralPath $config)) {
+            New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($config)) -Force | Out-Null
+            $stream = [IO.File]::Open($config, [IO.FileMode]::CreateNew)
+            $createdConfig = $true
+            try {
+                $json = '{"rdocConfigData":1,"Analytics_TotalOptOut":true,"CheckUpdate_AllowChecks":false}'
+                $bytes = [Text.Encoding]::UTF8.GetBytes($json)
+                $stream.Write($bytes, 0, $bytes.Length)
+            } finally {
+                $stream.Dispose()
+            }
+        }
+        $env:MAFIA_CAPTURE_DIRECTORY = $Directory
+        $script = Join-Path $root 'izvezi-snimak.py'
+        $process = Start-Process -FilePath $captureUI -ArgumentList "--python `"$script`"" -PassThru
+        if (-not $process.WaitForExit(180000)) {
+            $process.Kill()
+            $process.WaitForExit()
+            throw 'RenderDoc analiza je istekla. Originalni snimak je sacuvan u folderu Snimci.'
+        }
+    } finally {
+        if ($createdConfig) {
+            Remove-Item -LiteralPath $config -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 $status = 1
 try {
-    if ($PrepareOnly) {
+    if ($PrepareOnly -or $TestExporter) {
         Prepare-RenderDoc
+        if ($TestExporter) {
+            $test = Join-Path $root 'export-test'
+            New-Item -ItemType Directory -Path $test -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $test 'empty.rdc') -Value 'not a capture'
+            Export-Capture $test
+        }
         exit 0
     }
 
@@ -128,11 +166,9 @@ try {
     foreach ($capture in $captures) {
         $report.Add("Snimak $($capture.Name) ($($capture.Length) bajtova)")
     }
-    $env:MAFIA_CAPTURE_DIRECTORY = $session
-    $captureScript = Join-Path $root 'izvezi-snimak.py'
     $analysis = Join-Path $session 'RenderDoc analiza.txt'
     Write-Host 'Obradjujem snimak. Nemoj jos zatvarati ovaj prozor.'
-    Start-Process -FilePath $captureUI -ArgumentList "--python `"$captureScript`"" -Wait
+    Export-Capture $session
     if (Test-Path -LiteralPath $analysis -PathType Leaf) {
         $report.Add((Get-Content -LiteralPath $analysis -Raw -Encoding UTF8))
     } else {
@@ -143,7 +179,7 @@ try {
     $report.Add($_.Exception.Message)
     Write-Host $_.Exception.Message
 } finally {
-    if (-not $PrepareOnly) {
+    if (-not ($PrepareOnly -or $TestExporter)) {
         $report | Set-Content -LiteralPath $result -Encoding UTF8
         Write-Host 'Posalji fajl Mafia III rezultat.txt iz foldera sa pokretacem.'
     }

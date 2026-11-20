@@ -24,14 +24,9 @@ jobs:
         run: |
           $stage = Join-Path $env:RUNNER_TEMP 'Mafia III capture test'
           Copy-Item capture $stage -Recurse
-          powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $stage 'snimi-mafia.ps1') -PrepareOnly
-          if ($LASTEXITCODE -ne 0) { throw 'Preparing RenderDoc failed' }
-          $env:MAFIA_CAPTURE_DIRECTORY = $stage
-          Set-Content -LiteralPath (Join-Path $stage 'empty.rdc') -Value 'not a capture'
-          $renderdoc = Join-Path $stage 'RenderDoc_1.47_64/qrenderdoc.exe'
-          $script = Join-Path $stage 'izvezi-snimak.py'
-          Start-Process -FilePath $renderdoc -ArgumentList "--python `"$script`"" -Wait
-          $report = Get-Content -LiteralPath (Join-Path $stage 'RenderDoc analiza.txt') -Raw
+          powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $stage 'snimi-mafia.ps1') -TestExporter
+          if ($LASTEXITCODE -ne 0) { throw 'Preparing or invoking RenderDoc failed' }
+          $report = Get-Content -LiteralPath (Join-Path $stage 'export-test/RenderDoc analiza.txt') -Raw
           if ($report -notmatch 'Snimak empty.rdc' -or $report -notmatch 'Analiza nije zavrsena') {
             throw 'The exporter did not handle an invalid capture as expected'
           }
