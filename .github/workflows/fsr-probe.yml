@@ -1,0 +1,63 @@
+name: Windows FSR interop probe
+
+on:
+  push:
+    paths:
+      - .github/workflows/fsr-probe.yml
+      - probe/**
+  pull_request:
+    paths:
+      - .github/workflows/fsr-probe.yml
+      - probe/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build x64 Release
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - name: Check out probe source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Check out AMD FSR SDK 2.4.0 headers
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: GPUOpen-LibrariesAndSDKs/FidelityFX-SDK
+          ref: 7539ae8b6568ad29ed78a753404351daf3b5cca7 # v2.4.0
+          path: .sdk/fidelityfx
+          persist-credentials: false
+          sparse-checkout: |
+            Kits/FidelityFX/api/include
+            Kits/FidelityFX/upscalers/include
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S probe -B build -G 'Visual Studio 17 2022' -A x64 "-DFSR_SDK_ROOT=$env:GITHUB_WORKSPACE/.sdk/fidelityfx"
+
+      - name: Compile
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Install binary
+        shell: pwsh
+        run: cmake --install build --config Release --prefix "$env:GITHUB_WORKSPACE/package"
+
+      - name: Check Windows command-line entry point
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE/package/fsr-interop-probe.exe"
+          if ($LASTEXITCODE -ne 2) { throw "Expected usage exit code 2, got $LASTEXITCODE" }
+          exit 0
+
+      - name: Upload Windows x64 build
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: fsr-interop-probe-windows-x64
+          path: package/
+          if-no-files-found: error
