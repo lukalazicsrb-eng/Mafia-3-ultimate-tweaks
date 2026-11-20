@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$PrepareOnly, [switch]$TestExporter)
+param([switch]$PrepareOnly, [switch]$TestExporter, [switch]$AnalyzeExisting)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -10,6 +10,7 @@ $captureCommand = Join-Path $renderDoc 'renderdoccmd.exe'
 $captureUI = Join-Path $renderDoc 'qrenderdoc.exe'
 $report = [Collections.Generic.List[string]]::new()
 $report.Add('Mafia III - D3D11 dijagnostika')
+$report.Add('Pokretac mafia-capture-v0.1.2')
 
 function Prepare-RenderDoc {
     if ((Test-Path -LiteralPath $captureCommand -PathType Leaf) -and
@@ -75,21 +76,25 @@ function Find-Game {
         }
     }
 
+    Select-InputFile 'Izaberi Mafia III EXE fajl' 'Mafia III|mafia3definitiveedition.exe;mafia3.exe'
+}
+
+function Select-InputFile([string]$Title, [string]$Filter) {
     Add-Type -AssemblyName System.Windows.Forms
     $dialog = [Windows.Forms.OpenFileDialog]::new()
     try {
-        $dialog.Title = 'Izaberi Mafia III EXE fajl'
-        $dialog.Filter = 'Mafia III|mafia3definitiveedition.exe;mafia3.exe'
+        $dialog.Title = $Title
+        $dialog.Filter = $Filter
         if ($dialog.ShowDialog() -eq [Windows.Forms.DialogResult]::OK) {
             return $dialog.FileName
         }
     } finally {
         $dialog.Dispose()
     }
-    throw 'Nijedan Mafia III EXE nije izabran.'
+    throw 'Nijedan fajl nije izabran.'
 }
 
-function Export-Capture([string]$Directory) {
+function Export-Capture([string]$Directory, [string]$CaptureFile) {
     # On a fresh RenderDoc setup a first-run dialog otherwise blocks --python.
     $config = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'qrenderdoc\UI.config'
     $createdConfig = $false
@@ -107,12 +112,13 @@ function Export-Capture([string]$Directory) {
             }
         }
         $env:MAFIA_CAPTURE_DIRECTORY = $Directory
+        $env:MAFIA_CAPTURE_FILE = $CaptureFile
         $script = Join-Path $root 'izvezi-snimak.py'
         $process = Start-Process -FilePath $captureUI -ArgumentList "--python `"$script`"" -PassThru
         if (-not $process.WaitForExit(180000)) {
             $process.Kill()
             $process.WaitForExit()
-            throw 'RenderDoc analiza je istekla. Originalni snimak je sacuvan u folderu Snimci.'
+            throw 'RenderDoc analiza je istekla. Originalni snimak je sacuvan.'
         }
     } finally {
         if ($createdConfig) {
@@ -128,49 +134,61 @@ try {
         if ($TestExporter) {
             $test = Join-Path $root 'export-test'
             New-Item -ItemType Directory -Path $test -Force | Out-Null
-            Set-Content -LiteralPath (Join-Path $test 'empty.rdc') -Value 'not a capture'
-            Export-Capture $test
+            $sample = Join-Path $test 'empty.rdc'
+            Set-Content -LiteralPath $sample -Value 'not a capture'
+            Export-Capture $test $sample
         }
         exit 0
     }
 
-    if (Get-Process -Name 'mafia3definitiveedition', 'mafia3' -ErrorAction SilentlyContinue) {
-        throw 'Ugasi Mafia III, pa ponovo pokreni ovu skriptu.'
-    }
-    $game = Find-Game
-    $gameDir = [IO.Path]::GetDirectoryName($game)
-    $report.Add("Igra $([IO.Path]::GetFileName($game))")
-    $report.Add("EXE SHA-256 $((Get-FileHash -LiteralPath $game -Algorithm SHA256).Hash)")
-    $mod = Join-Path $gameDir 'dinput8.dll'
-    if (Test-Path -LiteralPath $mod -PathType Leaf) {
-        $report.Add("dinput8.dll SHA-256 $((Get-FileHash -LiteralPath $mod -Algorithm SHA256).Hash)")
-    } else {
-        $report.Add('dinput8.dll nije pronadjen uz igru.')
-    }
-
-    Prepare-RenderDoc
     $session = Join-Path $root ('Snimci\' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $PID)
     New-Item -ItemType Directory -Path $session -Force | Out-Null
-    $template = Join-Path $session 'MafiaIII'
-    Write-Host 'Kad ucitas igru, idi napolje, okreni kameru i pritisni F12 jednom.'
-    Write-Host 'Zatim izadji iz igre da se napravi mali tekstualni rezultat.'
-    & $captureCommand capture --working-dir $gameDir --capture-file $template --wait-for-exit $game
-    if ($LASTEXITCODE -ne 0) {
-        throw "RenderDoc nije mogao da zavrsi snimanje (kod $LASTEXITCODE)."
-    }
+    $selectedCapture = ''
+    if ($AnalyzeExisting) {
+        $selectedCapture = Select-InputFile 'Izaberi postojeci RenderDoc snimak (.rdc)' 'RenderDoc snimak|*.rdc'
+        Prepare-RenderDoc
+        $captures = @(Get-Item -LiteralPath $selectedCapture)
+    } else {
+        if (Get-Process -Name 'mafia3definitiveedition', 'mafia3' -ErrorAction SilentlyContinue) {
+            throw 'Ugasi Mafia III, pa ponovo pokreni ovu skriptu.'
+        }
+        $game = Find-Game
+        $gameDir = [IO.Path]::GetDirectoryName($game)
+        $report.Add("Igra $([IO.Path]::GetFileName($game))")
+        $report.Add("EXE SHA-256 $((Get-FileHash -LiteralPath $game -Algorithm SHA256).Hash)")
+        $mod = Join-Path $gameDir 'dinput8.dll'
+        if (Test-Path -LiteralPath $mod -PathType Leaf) {
+            $report.Add("dinput8.dll SHA-256 $((Get-FileHash -LiteralPath $mod -Algorithm SHA256).Hash)")
+        } else {
+            $report.Add('dinput8.dll nije pronadjen uz igru.')
+        }
 
-    $captures = @(Get-ChildItem -LiteralPath $session -Filter '*.rdc' -File)
-    if ($captures.Count -eq 0) {
-        throw 'RenderDoc nije sacuvao frejm. Ponovi snimanje i pritisni F12 dok je igra aktivna.'
+        Prepare-RenderDoc
+        $template = Join-Path $session 'MafiaIII'
+        Write-Host 'Ucitaj igru, okreni kameru i pritisni Print Screen jednom.'
+        Write-Host 'Sacekaj da RenderDoc zavrsi snimanje, pa izadji iz igre kroz meni.'
+        & $captureCommand capture --working-dir $gameDir --capture-file $template --wait-for-exit $game
+        if ($LASTEXITCODE -ne 0) {
+            throw "RenderDoc nije mogao da zavrsi snimanje (kod $LASTEXITCODE)."
+        }
+
+        $captures = @(Get-ChildItem -LiteralPath $session -Filter '*.rdc' -File)
+        if ($captures.Count -eq 0) {
+            throw 'RenderDoc nije sacuvao frejm. Pritisni Print Screen ili F12 dok je igra aktivna.'
+        }
     }
     foreach ($capture in $captures) {
         $report.Add("Snimak $($capture.Name) ($($capture.Length) bajtova)")
     }
     $analysis = Join-Path $session 'RenderDoc analiza.txt'
     Write-Host 'Obradjujem snimak. Nemoj jos zatvarati ovaj prozor.'
-    Export-Capture $session
+    Export-Capture $session $selectedCapture
     if (Test-Path -LiteralPath $analysis -PathType Leaf) {
-        $report.Add((Get-Content -LiteralPath $analysis -Raw -Encoding UTF8))
+        $summary = Get-Content -LiteralPath $analysis -Raw -Encoding UTF8
+        $report.Add($summary)
+        if ($summary -notmatch '(?m)^Uspesno analizirani snimci [1-9][0-9]* od ') {
+            throw 'Nijedan snimak nije mogao da se analizira. Detalji su u rezultatu.'
+        }
     } else {
         throw 'Snimak je sacuvan, ali RenderDoc nije mogao da izveze tekstualni pregled.'
     }

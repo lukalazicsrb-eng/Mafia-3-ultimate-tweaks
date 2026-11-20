@@ -2,6 +2,8 @@
 
 import os
 from pathlib import Path
+import struct
+import tempfile
 import zlib
 
 import renderdoc as rd
@@ -18,6 +20,52 @@ MAFIA_SHADERS = {
     0xA8D4D208: "TAA (subsurface)",
     0xF4D0E9C2: "Tonemap",
 }
+FILE_HEADER = struct.Struct("<8sII16s")
+SECTION_HEADER = struct.Struct("<4sIQQQII")
+FRAME_SECTION = b"renderdoc/internal/framecapture\0"
+
+
+class CaptureOpenError(RuntimeError):
+    pass
+
+
+def complete_frame_end(source, size):
+    raw_header = source.read(FILE_HEADER.size)
+    if len(raw_header) != FILE_HEADER.size:
+        return None
+    magic, version, header_size, _ = FILE_HEADER.unpack(raw_header)
+    if magic != b"RDOC\0\0\0\0" or version not in (0x100, 0x101, 0x102):
+        return None
+    if not FILE_HEADER.size <= header_size <= size - SECTION_HEADER.size:
+        return None
+
+    source.seek(header_size)
+    marker, kind, stored, unpacked, _, _, name_size = SECTION_HEADER.unpack(
+        source.read(SECTION_HEADER.size)
+    )
+    if marker != b"\0\0\0\0" or kind != 1 or name_size != len(FRAME_SECTION):
+        return None
+    if source.read(name_size) != FRAME_SECTION or not stored or not unpacked:
+        return None
+
+    end = source.tell() + stored
+    return end if end < size else None
+
+
+def copy_frame_prefix(path, destination):
+    with path.open("rb") as source:
+        end = complete_frame_end(source, os.fstat(source.fileno()).st_size)
+        if end is None:
+            raise ValueError("Ne mogu da izdvojim ceo prvi frejm iz ovog snimka.")
+        source.seek(0)
+        with destination.open("xb") as output:
+            remaining = end
+            while remaining:
+                block = source.read(min(remaining, 4 * 1024 * 1024))
+                if not block:
+                    raise ValueError("Snimak se promenio tokom citanja.")
+                output.write(block)
+                remaining -= len(block)
 
 
 def draws(actions):
@@ -88,7 +136,7 @@ def open_capture(path, report):
     try:
         started = cap.OpenFile(str(path), "", None)
         if started.code != rd.ResultCode.Succeeded:
-            raise RuntimeError(started.Message())
+            raise CaptureOpenError(started.Message())
         if cap.DriverName() != "D3D11":
             raise RuntimeError(f"Ocekivan je D3D11, snimak je {cap.DriverName()}")
         started, controller = cap.OpenCapture(rd.ReplayOptions(), None)
@@ -102,13 +150,37 @@ def open_capture(path, report):
         cap.Shutdown()
 
 
-directory = Path(os.environ["MAFIA_CAPTURE_DIRECTORY"])
-with (directory / "RenderDoc analiza.txt").open("w", encoding="utf-8") as report:
-    report.write("RenderDoc 1.47 / D3D11\n")
-    for capture in sorted(directory.glob("*.rdc"))[:3]:
-        report.write(f"\nSnimak {capture.name}\n")
-        try:
-            open_capture(capture, report)
-        except Exception as error:
-            report.write(f"Analiza nije zavrsena. {error}\n")
-raise SystemExit
+def analyze_capture(path, directory, report):
+    try:
+        open_capture(path, report)
+    except CaptureOpenError as error:
+        if "Unrecognised section type" not in str(error):
+            raise
+        report.write(f"Originalni snimak nije otvoren. {error}\n")
+        with tempfile.TemporaryDirectory(prefix="rdc-", dir=directory) as temporary:
+            copy = Path(temporary) / "frejm.rdc"
+            copy_frame_prefix(path, copy)
+            open_capture(copy, report)
+        report.write("Prvi frejm je uspesno analiziran iz privremene kopije.\n")
+
+
+def main():
+    directory = Path(os.environ["MAFIA_CAPTURE_DIRECTORY"])
+    selected = os.environ.get("MAFIA_CAPTURE_FILE")
+    captures = [Path(selected)] if selected else sorted(directory.glob("*.rdc"))[:3]
+    successful = 0
+    with (directory / "RenderDoc analiza.txt").open("w", encoding="utf-8") as report:
+        report.write("RenderDoc 1.47 / D3D11\n")
+        for capture in captures:
+            report.write(f"\nSnimak {capture.name}\n")
+            try:
+                analyze_capture(capture, directory, report)
+                successful += 1
+            except Exception as error:
+                report.write(f"Analiza nije zavrsena. {error}\n")
+        report.write(f"\nUspesno analizirani snimci {successful} od {len(captures)}\n")
+
+
+if __name__ == "__main__":
+    main()
+    raise SystemExit
