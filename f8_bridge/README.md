@@ -1,34 +1,61 @@
-# Mafia III F8 / TAA capture v5 — experimental Windows x64 beta
+# Mafia III v9 — Installable F8 / DirectDraw pipeline test
 
-**Status:** the original F8 Anti-aliasing dropdown has been confirmed working by a real-game screenshot. The new read-only TAA tracer has NOT yet been run in game. No real FSR rendering or resolution scaling is implemented.
+**Status: experimental Windows x64 in-game compatibility test, NOT working
+AMD FSR gameplay.**
 
-## Evidence from the first in-game test
+The supplied original Modern Tweaks 2.5.1 archive SHA-256 is
+`529b16daec59e2ce5c735e5c8e7974662b647591da2847c53a16f165a479e900`.
+The original binary is never uploaded to the repository or distributed in our package.
 
-MafiaF8_loader.log: Original Modern Tweaks loaded, DirectInput8Create forwarding succeeded, and F8 hook installed. The screenshot shows four FSR 4.1.2 entries inside the original F8 > Visuals > Anti-aliasing selector, all marked [unavailable]. This is intentional.
+## What's new
 
-The uploaded ModernTweaks(1).log was byte-for-byte identical to the earlier log (timestamps from 2026-11-20 22:49–22:52), so it did NOT describe the new F8 test. The new tracer has its own filename, MafiaTaaTrace.log.
+We statically confirmed the real DirectX 11 fullscreen Draw wrapper
+at RVA `0x79A40` and the original call at RVA `0x79A71`.
+Previous v7 captured DrawIndexed geometry instead of the fullscreen TAA path.
 
-## New code in v5
+The new `mafia_fsr_gamepass.dll` hooks the exact original Draw callsite
+only after SHA-256 + opcodes check and only when the game's original draw
+function pointer is ready. The `dinput8.dll` proxy now loads it on a
+separate delayed worker, without blocking Steam game startup. It records
+bounded shader-pointer identities, t0/t1/t2 render inputs, RTV0 and DSV
+in `MafiaFsrDraw.log`. Candidate pass signatures are descriptive
+diagnostics, NOT a final validation of motion vectors.
 
-- New `mafia_taa_trace.dll` compiled as Windows x64 C++ code.
-- Hooks the original draw-matcher call at Modern Tweaks RVA 0x796ED (target RVA 0x83C80) only after checking the exact DLL SHA-256 and original call bytes. Its wrapper calls the original matcher and returns the unchanged result.
-- Only samples draw candidates matching `Draw(6,0)`. Reads D3D11 texture descriptors for scene color, motion, t1, output render target, and depth stencil. Logs up to eight matching candidates plus limited summary counts.
-- Does not copy or modify textures, run the AMD FSR SDK, disable TAA, or alter frame output.
-- Upgraded DirectInput proxy reads `EnableTaaTrace=1` and loads the tracer only when explicitly enabled.
-- Existing v4.1 users can run `Nadogradi TAA test.cmd`; new installations can use `Instaliraj beta test.cmd`. Uninstall script restores original Modern Tweaks.
-- The source and Windows build are in this development branch; the original copyrighted Modern Tweaks DLL is not redistributed.
+The proxy registers the game's FSR telemetry and mode-selection callback
+with the already verified Modern Tweaks F8 Visuals menu. All four FSR choices
+remain **[unavailable]** because the actual game has not yet supplied
+raw motion, true depth, per-frame camera/projection/jitter and a successful
+FSR shadow output. This safeguard means a false positive cannot enable
+an unproven GPU effect.
 
-## Test procedure for an existing v4.1 install
+This ZIP includes `mafia_live_fsr_backend.dll` built with the official AMD
+FidelityFX SDK 2.4.0 headers; the backend is present but NOT auto-configured.
+Its AMD signed runtime files are not redistributed.
 
-1. Quit Mafia III entirely.
-2. Extract the v5 ZIP to its own folder.
-3. Run `Nadogradi TAA test.cmd` and enter the game directory; type TRACE to confirm. Do not use the clean installer if the earlier F8 beta is still installed.
-4. Launch Mafia III through Steam. Walk or rotate the camera for ~30 seconds, then exit through the game menu.
-5. Send `MafiaTaaTrace.log` and `MafiaF8_loader.log` from the game directory. A screenshot of the F8 dropdown is optional this time.
-6. Run `Vrati originalni mod.cmd` to restore the original after the test.
+## Installation
 
-If the game crashes or fails to start, immediately restore the original DLL via the uninstall script or the backed-up `dinput8.ModernTweaks.2.5.1.bak` file. Do not use this beta for everyday gameplay.
+The package includes `Instaliraj ili Nadogradi v9.cmd`, which works for
+both an original Modern Tweaks 2.5.1 install and our previously installed
+F8 beta (v4–v7). The scripts verify backup/version hashes, preserve the
+original 61 MB mod and create a reversible manifest. On failure or after the
+test run `Vrati originalni mod.cmd`.
 
-## Missing milestones
+The only requested game test: launch through Steam, play/move camera for
+~30 seconds, then send `MafiaFsrDraw.log` and `MafiaF8_loader.log`.
 
-A real 4.1.2 in-game FSR renderer still needs validated camera projection/exposure, per-frame jitter, full render-pass synchronization, D3D11-to-D3D12 resource copies/sharing with AMD SDK dispatch, output handoff before HUD, and genuine internal resolution control for Quality/Balanced/Performance. The synthetic probe elsewhere in the repository does not satisfy these requirements.
+**No guarantee of game stability**: executable patching can race the render
+thread, and we cannot run Mafia III on the hosted Windows CI machines.
+Restoration is provided and must be done if the game doesn't launch.
+
+## Technical remaining requirement
+
+Before turning the FSR Native AA mode on, implement trustworthy actual-game
+pass classification and **raw** motion/depth + camera data capture.
+The TAA t2 texture contains encoded motion, and older DrawIndexed logs
+did not contain depth. No unsafe in-game dispatch occurs from v9.
+Quality/Balanced/Performance also require internal 3D render resolution
+redirection, not yet developed. Real AMD FSR gameplay has not been
+confirmed, and this branch stays a draft PR.
+
+See also `docs/directdraw-fsr-integration-status.md` and
+`docs/live-fsr-game-evidence.md`.
