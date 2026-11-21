@@ -1,13 +1,24 @@
-# Experimental Modern Tweaks v2.5.1 F8 AA extension
+# Experimental F8 compatibility beta for Modern Tweaks 2.5.1
 
-**Status: source-code research prototype; no functional in-game FSR yet.**
+**Status: Windows x64 beta build; NOT working AMD FSR in Mafia III.**
 
-Static disassembly of the exact original dinput8.dll (SHA-256 529b16daec59e2ce5c735e5c8e7974662b647591da2847c53a16f165a479e900) identified the ImGui anti-aliasing Combo call in the original Visuals menu: Visuals handler RVA 0x5EDE0, count of three at RVA 0x5EEC5, Combo call RVA 0x5EEE3 targeting RVA 0x10E3B0. The original handler stores TemporalAA = index > 0, DLAA = index == 2.
+The original Visuals/AA ImGui Combo call is located at RVA 0x5EEE3 and has 3 options. The experiment verifies the original DLL SHA-256 (529b16daec59e2ce5c735e5c8e7974662b647591da2847c53a16f165a479e900) and redirects ONLY this call to an adapter that appends four **disabled** FSR choices. The original settings for Off/TAA/DLAA remain intact. FSR entries cannot be enabled from synthetic SDK tests alone.
 
-The C++ files in this directory implement the FSR selection policy and tests. They preserve the original three AA modes. Proposed modes are FSR 4.1.2 Native AA, Quality, Balanced and Performance. A mode cannot be accepted unless actual in-game runtime telemetry confirms provider 4.1.2, bridge readiness, temporal inputs, a successful game-frame dispatch, and presentation. Real lower-resolution scene rendering is additionally required for Quality/Balanced/Performance. The synthetic bridge test in the existing probe folder is insufficient.
+This branch now also builds:
+- dinput8.dll, an experimental DirectInput8Create proxy with a worker-thread chain loader;
+- mafia_f8_experimental.dll, the version-locked AA Combo extension;
+- PowerShell installer and rollback scripts in f8_bridge/beta;
+- C++ menu-selection tests.
 
-Build/test: cmake -S f8_bridge -B build-f8 ; cmake --build build-f8 ; ctest --test-dir build-f8 --output-on-failure
+When installed via the script, the proxy loads a user's local preserved ModernTweaks_original.dll (no binary from the third-party author is distributed), optionally installs the F8 hook and writes MafiaF8_loader.log. The installer verifies the original DLL SHA-256, makes a backup and requires the literal TEST confirmation. Launch the game through Steam. Use the rollback script after any compatibility test.
 
-**Not yet implemented:** finished Windows call-site patch/loader, actual integrated game FSR renderer, native in-game F8 testing, automatic install, persistence of FSR selection, lower-resolution 3D rendering, ready-to-use dinput8.dll. The original Modern Tweaks binary is not distributed or modified.
+**Important:** Actual launch, Steam compatibility, F8 hook interaction, resource synchronization and stability with the game have NOT been verified. The beta is reversible but may crash the game. It MUST NOT be presented as a ready-to-use FSR mod.
 
-The standalone Windows FSR bridge probe in ../probe has already succeeded on synthetic frames. This branch focuses on connecting verified real-game rendering with the original F8 interface safely.
+The genuine FSR 4.1.2 AMD GPU dispatch has been confirmed only in a standalone synthetic test on the user's RX 6700 XT. A real game-frame renderer and pre-HUD compositing stage, per-frame temporal inputs, and lower scene resolution are still required. Until these are independently verified FSR remains unavailable.
+
+Portable tests:
+cmake -S f8_bridge -B build-f8
+cmake --build build-f8 --config Release
+ctest --test-dir build-f8 -C Release --output-on-failure
+
+Windows GitHub Actions builds are also available. See beta/PROCITAJ.txt for test instructions.
