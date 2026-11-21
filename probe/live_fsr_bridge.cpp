@@ -228,7 +228,8 @@ struct LiveNativeAaBridge::Impl {
     bool process(ID3D11DeviceContext* gameContext,
                  const LiveFrameTextures& textures,
                  const LiveFrameEvidence& evidence,
-                 const FsrFrameParameters& params) {
+                 const FsrFrameParameters& params,
+                 bool presentToGame) {
         if (disabled) return false;
         if (!hasEvidence(evidence)) {
             error = "Real-game temporal evidence missing; vanilla TAA must run";
@@ -290,22 +291,26 @@ struct LiveNativeAaBridge::Impl {
         queue->ExecuteCommandLists(1, lists);
         const std::uint64_t outputReady = ++nextFence;
         check(queue->Signal(fence12.Get(), outputReady), "D3D12 output fence signal");
-        check(context4->Wait(fence11.Get(), outputReady), "D3D11 output wait");
-
-        // Only HERE may the pre-HUD game output be changed.
-        converters->blit(gameContext, output.srv.Get(), textures.preHudOutput);
-        check(context4->Signal(fence11.Get(), ++nextFence), "D3D11 final fence");
-        context4->Flush();
-        check(fence12->SetEventOnCompletion(nextFence, completionEvent.h),
-              "SetEventOnCompletion");
+        // Synchronize the FSR GPU dispatch BEFORE touching the game's RTV.
+        // The shadow/preflight path uses real game textures, but never blits.
+        check(fence12->SetEventOnCompletion(outputReady, completionEvent.h),
+              "SetEventOnCompletion (FSR GPU ready)");
         const DWORD result = WaitForSingleObject(completionEvent.h, 2000);
         if (result != WAIT_OBJECT_0) {
             disabled = true;
-            error = "GPU wait failed; bridge disabled, do not destroy inflight resources";
+            error = "FSR GPU wait failed; no game output was modified";
             return false;
         }
-        check(d12->GetDeviceRemovedReason(), "D3D12 device removed");
-        check(gameDevice->GetDeviceRemovedReason(), "D3D11 device removed");
+        check(d12->GetDeviceRemovedReason(), "D3D12 device status");
+        check(gameDevice->GetDeviceRemovedReason(), "D3D11 device status");
+        if (presentToGame) {
+            // This is the first operation which could modify the game image.
+            converters->blit(gameContext, output.srv.Get(), textures.preHudOutput);
+            check(context4->Signal(fence11.Get(), ++nextFence), "D3D11 final fence");
+            context4->Flush();
+            // Only future GPU access has to wait for the output blit.
+            check(queue->Wait(fence12.Get(), nextFence), "Queue waits for final blit");
+        }
         error.clear();
         return true;
     }
@@ -320,10 +325,11 @@ LiveNativeAaBridge::~LiveNativeAaBridge() = default;
 bool LiveNativeAaBridge::process(ID3D11DeviceContext* context,
                                 const LiveFrameTextures& textures,
                                 const LiveFrameEvidence& verified,
-                                const FsrFrameParameters& parameters) noexcept {
+                                const FsrFrameParameters& parameters,
+                                bool presentToGame) noexcept {
     if (!impl_) return false;
     try {
-        return impl_->process(context, textures, verified, parameters);
+        return impl_->process(context, textures, verified, parameters, presentToGame);
     } catch (const std::exception& e) {
         impl_->disabled = true;
         impl_->error = e.what();
