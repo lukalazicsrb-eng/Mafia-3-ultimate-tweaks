@@ -18,8 +18,8 @@
 #include <initializer_list>
 namespace {
 constexpr wchar_t EXPECTED_HASH[] = L"529b16daec59e2ce5c735e5c8e7974662b647591da2847c53a16f165a479e900";
-constexpr std::uintptr_t CALL_RVA = 0x796ed, MATCHER_RVA = 0x83c80;
-const std::array<unsigned char,5> ORIGINAL_CALL{{0xe8,0x8e,0xa5,0x00,0x00}};
+constexpr std::uintptr_t CALL_RVA = 0x799d6, MATCHER_RVA = 0x83c80;
+const std::array<unsigned char,5> ORIGINAL_CALL{{0xe8,0xa5,0xa2,0x00,0x00}};
 using Matcher = bool(__fastcall*)(ID3D11DeviceContext*,UINT,UINT);
 Matcher originalMatcher=nullptr;
 std::filesystem::path logPath;
@@ -117,33 +117,35 @@ bool isCandidate(const Bound& b){
       &&b.t0.w==b.t2.w&&b.t0.h==b.t2.h
       &&b.t0.w==b.rtv.w&&b.t0.h==b.rtv.h;
 }
-bool __fastcall traceDraw(ID3D11DeviceContext* ctx,UINT vertexCount,UINT firstVertex){
+bool __fastcall traceDraw(ID3D11DeviceContext* ctx,UINT indexCount,UINT firstIndex){
     auto orig=originalMatcher;
     if(!orig)return false;
     const unsigned total=++allMatcherCalls;
-    const bool eligible=(ctx!=nullptr && vertexCount==6 && firstVertex==0);
+    // The original mod's direct DrawIndexed hook calls this point on live frames.
+    // V5/V6 intercepted the *indirect* hook path, which the target game bypassed.
+    const bool eligible=(ctx!=nullptr && indexCount==6 && firstIndex==0);
     const unsigned eligibleIndex=eligible ? ++draws : 0;
     // V5 could silently collect zero lines when no signature matched and
     // fewer than 256 eligible draws ran. V6 always logs the first call.
     if(total<=4 || total==32 || total==512 || total==4096){
         std::ostringstream entry;
         entry<<"[Hook reached] total="<<total
-             <<" vertexCount="<<vertexCount<<" firstVertex="<<firstVertex
+             <<" indexCount="<<indexCount<<" firstIndex="<<firstIndex
              <<" context="<<(ctx?"present":"null")
              <<" eligible_Draw6="<<draws.load();
         log(entry.str());
     }
     // Read-only bounded D3D11 descriptor sampling before the original match.
-    const bool takeSample=eligible && eligibleIndex<=8;
+    const bool takeSample=eligible && (eligibleIndex<=32 || (eligibleIndex<=2048 && eligibleIndex%256==0));
     Bound bound{};
     if(takeSample)bound=getBound(ctx);
-    const bool handled=orig(ctx,vertexCount,firstVertex);
+    const bool handled=orig(ctx,indexCount,firstIndex);
     if(handled)++matcherSuccess;
     if(takeSample){
         const bool signature=isCandidate(bound);
         if(signature)++candidates;
         std::ostringstream out;
-        out<<"[Draw6 sample #"<<eligibleIndex<<"] signature="<<(signature?1:0)
+        out<<"[DrawIndexed(6,0) sample #"<<eligibleIndex<<"] signature="<<(signature?1:0)
            <<" original_matcher_result="<<(handled?1:0)
            <<" thread="<<GetCurrentThreadId()<<" "
            <<label("color",bound.t0)<<" "<<label("t1",bound.t1)<<" "
@@ -199,9 +201,9 @@ extern "C" __declspec(dllexport) BOOL __cdecl InstallTaaTrace(HMODULE module){
     if(GetModuleFileNameW(module,filename,32768))logPath=std::filesystem::path(filename).parent_path()/"MafiaTaaTrace.log";
     // Start each capture with a fresh log instead of mixing prior sessions.
     { std::ofstream fresh(logPath, std::ios::trunc); }
-    log("=== Mafia III Modern Tweaks read-only TAA resource probe V6 ===");
-    log("V6: immediate first-call trace; first 8 Draw(6,0) descriptors; bounded aggregate counters.");
-    log("Mod DLL hash and original Draw matcher CALL RVA 0x796ed verified.");
+    log("=== Mafia III Modern Tweaks read-only TAA resource probe V7 ===");
+    log("V7: direct DrawIndexed matcher call, first 32 eligible samples and spaced checkpoints.");
+    log("Mod DLL SHA-256 and ACTIVE DIRECT DrawIndexed CALL RVA 0x799D6 validated.");
     log("Only resource descriptors are read; no textures are modified and no FSR is used.");
     originalMatcher=reinterpret_cast<Matcher>(base+MATCHER_RVA);
     DWORD old=0;
@@ -211,7 +213,7 @@ extern "C" __declspec(dllexport) BOOL __cdecl InstallTaaTrace(HMODULE module){
     std::memcpy(site,patched.data(),5);
     FlushInstructionCache(GetCurrentProcess(),site,5);
     DWORD unused=0;VirtualProtect(site,5,old,&unused);
-    log("Interceptor installed; enter gameplay and rotate the camera.");
+    log("V7 direct-path interceptor installed; original TAA matcher preserved.");
     return TRUE;
 }
 BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID){
