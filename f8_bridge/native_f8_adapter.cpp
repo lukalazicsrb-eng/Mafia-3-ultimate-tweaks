@@ -20,9 +20,11 @@ constexpr std::uintptr_t comboRva = 0x10E3B0;
 constexpr std::array<unsigned char,5> originalCall{{0xE8,0xC8,0xF4,0x0A,0x00}};
 using Combo = bool (__cdecl*)(const char*,int*,const char* const*,int,int);
 using EvidenceCallback = void (__cdecl*)(BackendEvidence*);
+using ModeCallback = void (__cdecl*)(int);
 MenuState state;
 Combo originalCombo = nullptr;
 EvidenceCallback evidenceCallback = nullptr;
+ModeCallback modeCallback = nullptr;
 std::uint8_t* patchedSite = nullptr;
 void* allocatedRelay = nullptr;
 std::array<unsigned char,5> patchedBytes{};
@@ -101,6 +103,7 @@ bool __cdecl extensionCombo(const char* label,int* current,const char* const* or
     auto result=state.select(static_cast<Mode>(shown),evidence);
     if(!result.accepted) return false;
     *current=result.originalIndex;
+    if(modeCallback) modeCallback(static_cast<int>(result.requestedMode));
     return result.shouldNotifyOriginal;
 }
 }
@@ -143,6 +146,11 @@ extern "C" __declspec(dllexport) void __cdecl RegisterFsrEvidenceCallback(void (
     std::lock_guard<std::mutex> lock(guard);
     evidenceCallback=callback;
 }
+extern "C" __declspec(dllexport) void __cdecl RegisterFsrModeCallback(
+    void (__cdecl* callback)(int)) {
+    std::lock_guard<std::mutex> lock(guard);
+    modeCallback=callback;
+}
 extern "C" __declspec(dllexport) BOOL __cdecl RemoveF8Extension() {
     // Must be called only after the game/menu rendering thread has stopped.
     if(!patchedSite || std::memcmp(patchedSite,patchedBytes.data(),5)!=0) return FALSE;
@@ -150,6 +158,7 @@ extern "C" __declspec(dllexport) BOOL __cdecl RemoveF8Extension() {
     patchedSite=nullptr;
     originalCombo=nullptr;
     evidenceCallback=nullptr;
+    modeCallback=nullptr;
     if(allocatedRelay) VirtualFree(allocatedRelay,0,MEM_RELEASE);
     allocatedRelay=nullptr;
     return TRUE;
