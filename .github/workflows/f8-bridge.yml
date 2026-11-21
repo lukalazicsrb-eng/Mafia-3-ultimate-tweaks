@@ -1,0 +1,103 @@
+name: Experimental F8 bridge build and policy tests
+on:
+  push:
+    paths:
+      - 'f8_bridge/**'
+      - 'tools/verify_f8_site.py'
+      - '.github/workflows/f8-bridge.yml'
+  pull_request:
+    paths:
+      - 'f8_bridge/**'
+      - 'tools/verify_f8_site.py'
+      - '.github/workflows/f8-bridge.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out official AMD SDK v2.4.0 headers
+        if: runner.os == 'Windows'
+        uses: actions/checkout@v4
+        with:
+          repository: GPUOpen-LibrariesAndSDKs/FidelityFX-SDK
+          ref: 7539ae8b6568ad29ed78a753404351daf3b5cca7
+          path: .sdk/fidelityfx
+          persist-credentials: false
+          sparse-checkout: |
+            Kits/FidelityFX/api/include
+            Kits/FidelityFX/upscalers/include
+      - name: Configure Windows x64
+        if: runner.os == 'Windows'
+        run: cmake -S f8_bridge -B build-f8 -A x64
+      - name: Configure Linux
+        if: runner.os != 'Windows'
+        run: cmake -S f8_bridge -B build-f8
+      - name: Build
+        run: cmake --build build-f8 --config Release
+      - name: Test F8 selection and missing-game guard
+        run: ctest --test-dir build-f8 -C Release --output-on-failure
+      - name: Build official AMD FSR live-frame backend (Windows only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S probe -B build-probe -A x64 "-DFSR_SDK_ROOT=$env:GITHUB_WORKSPACE/.sdk/fidelityfx"
+          cmake --build build-probe --config Release --target mafia_live_fsr_backend --parallel
+      - name: Parse installer/rollback PowerShell scripts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem f8_bridge/beta -Filter *.ps1) {
+            $tokens=$null
+            $errors=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors)
+            if ($errors.Count -gt 0) { throw "PowerShell syntax errors in $($file.Name): $($errors -join '; ')" }
+          }
+      - name: Prepare v9 reversible in-game DirectDraw test package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item build-f8/Release/dinput8.dll package/dinput8.dll
+          Copy-Item build-f8/Release/mafia_f8_experimental.dll package/mafia_f8_experimental.dll
+          Copy-Item build-f8/Release/mafia_taa_trace.dll package/mafia_taa_trace.dll
+          Copy-Item build-f8/Release/mafia_fsr_gamepass.dll package/mafia_fsr_gamepass.dll
+          Copy-Item build-probe/Release/mafia_live_fsr_backend.dll package/mafia_live_fsr_backend.dll
+          Copy-Item f8_bridge/beta/install_beta.ps1 package/
+          Copy-Item f8_bridge/beta/upgrade_v9.ps1 package/
+          Copy-Item f8_bridge/beta/upgrade_draw_v10.ps1 package/
+          Copy-Item f8_bridge/beta/install_or_upgrade_v10.ps1 package/
+          Copy-Item 'f8_bridge/beta/Instaliraj ili Nadogradi v10.cmd' package/
+          Copy-Item f8_bridge/beta/install_or_upgrade_v9.ps1 package/
+          Copy-Item f8_bridge/beta/uninstall_beta.ps1 package/
+          # v10 one-click entrypoint supersedes v9
+          Copy-Item 'f8_bridge/beta/Vrati originalni mod.cmd' package/
+          Copy-Item f8_bridge/beta/PROCITAJ.txt package/
+          Copy-Item f8_bridge/README.md package/F8_SOURCE_README.md
+          Get-FileHash package/dinput8.dll -Algorithm SHA256
+          Get-FileHash package/mafia_fsr_gamepass.dll -Algorithm SHA256
+          Get-FileHash package/mafia_live_fsr_backend.dll -Algorithm SHA256
+      - name: Upload gamepass integration DLL (source-level developer build ONLY)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mafia-DirectDraw-FSR-Bridge-Dev-x64-NOT-INSTALLABLE
+          path: |
+            build-f8/Release/mafia_fsr_gamepass.dll
+            build-f8/Release/test_fsr_gamepass_guard.exe
+            f8_bridge/menu_state.h
+            probe/live_fsr_api.h
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload experimental Windows beta ZIP (NO FSR GAMEPLAY)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MafiaIII-v10-MultiDraw-FSR-TAA-Discovery-Win64-NO-FSR
+          path: package/*
+          if-no-files-found: error
+          retention-days: 14

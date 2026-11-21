@@ -1,0 +1,59 @@
+name: Codex source handoff ZIP (native FSR4 only)
+
+on:
+  push:
+    paths:
+      - "codex_handoff/**"
+      - ".github/workflows/codex-source-bundle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-zip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact native FSR branch sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Audit source-only archive before packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f codex_handoff/CODEX_PROMPT_NATIVE_FSR4_MAFIA3.md
+          test -f f8_bridge/draw_pass_bridge.cpp
+          test -f f8_bridge/native_f8_adapter.cpp
+          test -f probe/live_fsr_bridge.cpp
+          test -f probe/fsr_session.cpp
+          test -f .github/workflows/f8-bridge.yml
+          test -f .github/workflows/fsr-probe.yml
+          mkdir -p stage/MafiaIII_ModernTweaks_FSR4_Codex_Source
+          cp -a README.md f8_bridge probe docs tools capture codex_handoff .github \
+                stage/MafiaIII_ModernTweaks_FSR4_Codex_Source/
+          find stage -type f \( -iname '*.dll' -o -iname '*.exe' -o -iname '*.pdb' -o -iname '*.addon' \) \
+            -print -quit | grep -q . && {
+              echo 'Unexpected compiled file in source package; refusing.'
+              exit 1
+            } || :
+          echo "Source commit: $GITHUB_SHA" > \
+            stage/MafiaIII_ModernTweaks_FSR4_Codex_Source/SOURCE_GIT_COMMIT.txt
+          (
+            cd stage/MafiaIII_ModernTweaks_FSR4_Codex_Source
+            find . -type f ! -name SOURCE_FILE_SHA256.txt -print0 |
+              sort -z | xargs -0 sha256sum > SOURCE_FILE_SHA256.txt
+          )
+          cd stage
+          zip -q -r -9 ../MafiaIII_ModernTweaks_FSR4_Codex_Source.zip MafiaIII_ModernTweaks_FSR4_Codex_Source
+          cd ..
+          unzip -t MafiaIII_ModernTweaks_FSR4_Codex_Source.zip | tail -2
+          sha256sum MafiaIII_ModernTweaks_FSR4_Codex_Source.zip
+      - name: Upload complete source-only Codex handoff ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: MafiaIII-ModernTweaks-FSR4-Source-for-Codex
+          path: MafiaIII_ModernTweaks_FSR4_Codex_Source.zip
+          if-no-files-found: error
+          retention-days: 30

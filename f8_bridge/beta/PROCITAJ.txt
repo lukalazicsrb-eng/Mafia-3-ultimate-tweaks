@@ -1,0 +1,49 @@
+MAFIA III FSR 4.1.2 — DIRECT DRAW PROFILER V10
+==================================================
+Windows x64 / Original Modern Tweaks v2.5.1
+
+V10 JE INSTALACIONA DIJAGNOSTIKA. Pravi FSR nije jos aktiviran.
+FSR Native AA / Quality / Balanced / Performance ostaju [unavailable].
+
+STA JE NOVO:
+- Log MafiaFsrDraw.log sada razlikuje Draw sa 3, 4, 6 i drugim brojem
+  verteksa. Raniji v9 log samo Draw(6,0) nije prepoznao nijedan HDR TAA
+  prolaz: sve zabelezene teksture t0 bile su uglavnom A8_UNORM
+  2048x2048 i pixel shader je bio isti.
+- Istraživanje Luma Framework Mafia III izvornog koda potvrdilo je da
+  ručni Draw(6,0) u tom modu nije dokaz da originalni TAA koristi 6
+  verteksa; zato sada trazimo sve potencijalne fullscreen pozive.
+- Log sada uključuje ID konteksta, vrstu Draw, shader pokazivac, formate
+  t0/t1/t2, RTV0/DSV i sazetak poziva, uz strogo ogranicen broj redova.
+- Kod ne menja GPU teksture i ne uključuje FSR; originalni TAA ostaje.
+
+JEDNA INSTALACIJA:
+1. Ugasi Mafia III.
+2. Raspakuj celu v10 ZIP arhivu u poseban folder.
+3. Pokreni "Instaliraj ili Nadogradi v10.cmd".
+4. Unesi folder gde je mafia3definitiveedition.exe.
+5. Ako je v9 vec instaliran, potvrdi V10. Menja se samo
+   mafia_fsr_gamepass.dll; ostali DLL-ovi ostaju netaknuti.
+   Ako je ranija F8 beta: potvrdi V9.
+   Ako je cist originalni Modern Tweaks: potvrdi TEST.
+   Skripta automatski bira odgovarajuci metod i proverava SHA256.
+6. Pokreni Mafia III preko Steama, ucitaj sejv i igraj/okreci kameru
+   bar 30 sekundi, pa normalno izadji.
+
+ZA ANALIZU: posalji MafiaFsrDraw.log i MafiaF8_loader.log.
+Nije potrebno slati prethodne v5–v9 logove ponovo.
+
+AKO IMA PROBLEMA: ugasi igru i pokreni "Vrati originalni mod.cmd" iz
+raspakovanog foldera; originalna kopija je
+dinput8.ModernTweaks.2.5.1.bak u folderu igre.
+Ako uninstaller ne uspe, sacuvaj sve DLL-ove pre rucnog vracanja.
+
+Proverava se iskljucivo originalni Modern Tweaks 2.5.1 SHA256:
+529b16daec59e2ce5c735e5c8e7974662b647591da2847c53a16f165a479e900
+
+OVO NIJE PREVIEW SA VECIM FPS-OM. FSR renderer je delimično
+implementiran, ali u igri i dalje nedostaju tacni motion vectors,
+depth, kamera/jitter i proveren izlaz pre HUD-a. Bez tih podataka
+FSR opcije ne smeju da se aktiviraju.
+
+Ako zelis samo da igras, ostani na originalnom Modern Tweaks-u.
