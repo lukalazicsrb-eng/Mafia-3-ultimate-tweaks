@@ -45,7 +45,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          cmake -S probe -B build-probe -G 'Visual Studio 17 2022' -A x64 "-DFSR_SDK_ROOT=$env:GITHUB_WORKSPACE/.sdk/fidelityfx"
+          cmake -S probe -B build-probe -A x64 "-DFSR_SDK_ROOT=$env:GITHUB_WORKSPACE/.sdk/fidelityfx"
           cmake --build build-probe --config Release --target mafia_live_fsr_backend --parallel
       - name: Parse installer/rollback PowerShell scripts
         if: runner.os == 'Windows'
