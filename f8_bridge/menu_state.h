@@ -15,6 +15,9 @@ struct BackendEvidence {
     bool gameFrameDispatchSucceeded = false;
     bool outputPresentedInGame = false;
     bool lowerResolution3DVerified = false;
+    // A successful real-game GPU preflight that does NOT overwrite the game.
+    bool shadowGameFrameDispatchSucceeded = false;
+    bool outputHandoffValidated = false;
 };
 struct Choice { Mode mode; std::string_view label; bool available; };
 using Choices = std::array<Choice, 7>;
