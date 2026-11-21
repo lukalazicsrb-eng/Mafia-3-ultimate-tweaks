@@ -1,40 +1,26 @@
-# Mafia III experimental F8 menu compatibility test (Windows x64)
+# Mafia III F8 + TAA capture v5 (Windows x64)
 
-**THIS IS NOT FUNCTIONAL FSR 4.1.2.** The program checks whether a newly compiled
-DirectInput proxy can load the preserved original Modern Tweaks 2.5.1 and append
-four **disabled** FSR choices to the existing **F8 > Visuals > anti-aliasing**
-ImGui combo. No game-frame AMD FSR processing exists in this beta.
+THIS IS AN EXPERIMENTAL DIAGNOSTIC, NOT WORKING FSR 4.1.2.
 
-Your game must already have the exact Modern Tweaks 2.5.1 dinput8.dll with SHA256
-529b16daec59e2ce5c735e5c8e7974662b647591da2847c53a16f165a479e900.
-Installation checks that hash and will not overwrite unknown game mods.
+IF YOU ALREADY INSTALLED THE WORKING F8 v4.1 BETA:
+1. Close Mafia III.
+2. Double-click "Nadogradi TAA test.cmd".
+3. Enter your game folder and type TRACE when requested.
+4. Open Mafia III through STEAM.
+5. Walk or rotate camera for about 30 seconds. Then exit normally.
+6. Send MafiaTaaTrace.log and MafiaF8_loader.log from the game folder.
+7. Run "Vrati originalni mod.cmd" to restore the original after testing.
 
-## Test steps
-1. Completely exit Mafia III. Keep Steam installed and start the game through Steam.
-2. Extract this package outside the game directory.
-3. Run "Instaliraj beta test.cmd", paste the game directory, and explicitly type TEST.
-4. Launch Mafia III normally from Steam. Verify usual Modern Tweaks features are still there.
-5. Press F8, go to Visuals, and open the AA selection dropdown.
-6. See if "FSR 4.1.2 Native AA [unavailable]" plus Quality, Balanced,
-   Performance appear. They should NOT be usable; this tests the original F8
-   menu hook only and avoids claiming FSR runs.
-7. Exit the game normally. Send MafiaF8_loader.log, ModernTweaks.log and a
-   screenshot of the anti-aliasing dropdown. Mention any crash/Steam error.
-8. Run "Vrati originalni mod.cmd" to restore the original original DLL.
-   You can also manually restore dinput8.ModernTweaks.2.5.1.bak to dinput8.dll
-   with the game closed if the uninstall script is unavailable.
+IF YOU RESTORED ORIGINAL MOD FIRST:
+1. Run "Instaliraj beta test.cmd".
+2. Type your game folder and confirm TEST.
+3. Launch through Steam; follow steps 5-7 above.
 
-This package does NOT include the original third-party Modern Tweaks binary.
-Steam should be running and should launch the game. If the game stops opening
-after installation, restore the original DLL immediately.
+MafiaTaaTrace.log records D3D11 texture formats/dimensions only.
+No real FSR game-frame processing is installed; FSR menu choices remain [unavailable].
 
-## Implementation
-The proxy builds as dinput8.dll. It loads game-local ModernTweaks_original.dll
-on a worker outside DllMain, forwards DirectInput8Create, and optionally loads
-mafia_f8_experimental.dll from the same directory. The adapter validates the
-original full file SHA-256 and the exact AA call-site before installing a
-version-specific call redirect. The original binary is not patched on disk.
+If the game fails to launch, restore dinput8.dll from the backed-up
+dinput8.ModernTweaks.2.5.1.bak file with the game fully closed.
 
-**UNVERIFIED:** game boot, plugin initialization order, safety of instruction
-patch with concurrently executing render threads, actual menu behavior. This
-beta is opt-in, may be unstable, and is intended for a reversible test only.
+Safety: the scripts verify the exact original Modern Tweaks v2.5.1 SHA-256.
+Only use this with the original mod version. This beta has not been tested in game.
