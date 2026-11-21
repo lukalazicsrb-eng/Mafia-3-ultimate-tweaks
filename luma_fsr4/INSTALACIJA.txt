@@ -1,0 +1,56 @@
+MAFIA III DEFINITIVE EDITION — EXPERIMENTAL FSR 4.1.2 / LUMA
+================================================================
+
+Ovo je poseban build Luma Mafia III dodatka u kome su ukljucene opcije
+UseLumaFSR=true i UseLumaFSR4=true, sa AMD SDK 2.4.0 FSR 4.1.2
+potpisanim DX12 runtime fajlovima. Luma vec ima sistem za
+pre-TAA color, raw motion, depth i jitter u Mafia III.
+
+STANJE: IZVORNI KOD I KOMPILACIJA NISU DOKAZ DA CE FSR 4 RADITI U IGRI.
+Ova kombinacija jos nije testirana u tvojoj instalaciji. Mozda postoji
+problem sa ReShade, driverom, depth shaderom ili Modern Tweaks.
+
+INSTALACIJA
+1. Ugasi Mafiju i raspakuj CEO ZIP u poseban folder van igre.
+2. Pokreni "Instaliraj FSR4.cmd" i unesi folder igre.
+3. Potvrdi sa FSR4. Skripta pravi kompletan backup prepisanih fajlova.
+4. Ako je instaliran nas stari v9/v10 F8 proxy, skripta proverava njegov
+   SHA256 i privremeno vraca originalni Modern Tweaks dinput8.dll.
+   Povratak unazad restore skriptom vraca prethodni proxy.
+5. Pokreni igru preko STEAMA.
+6. Pritisni HOME da otvoris Luma/ReShade meni, izaberi FSR4 ako postoji.
+   Ako nema FSR4 ili log prijavi fallback FSR3, ne tvrdi da radi FSR4.
+
+ORIGINALNI F8 MENU
+Modern Tweaks i dalje ima svoj F8 meni, ali za ovaj test ukljucivanje
+FSR4 se vrsi kroz Luma HOME/ReShade meni. Povezivanje F8 sa Luma
+podesavanjima jos NIJE implementirano. Stari v10 eksperimentalni
+F8 proxy se uklanja iz aktivnog ucitavanja da ne pravi konflikt.
+
+VRACANJE ORIGINALA
+1. Ugasi Mafia III.
+2. Pokreni "Vrati pre instalacije.cmd", potvrdi RESTORE.
+3. Skripta proverava hash aktivnih i rezervnih fajlova.
+4. Backup je u MafiaFSR4_Luma_Preinstall_Backup folderu igre.
+   Backup se NE BRIŠE automatski.
+
+FAJLOVI KOJI MOGU DA SE UCITAJU:
+- dxgi.dll: Luma/ReShade loader iz originalnog Luma Mafia III paketa.
+- Luma-Mafia III.addon: NAS FSR4-enabled build originalnog Luma koda.
+- amd_fidelityfx_loader_dx12.dll i amd_fidelityfx_upscaler_dx12.dll:
+  zvanični AMD SDK 2.4.0, FSR Upscaling 4.1.2.
+- Luma/*: originalni Mafia III Luma shadere i resurse.
+
+IZVORI I LICENCE
+Luma Framework: Filippo Tarpini i drugi autori, custom MIT licenca.
+Mafia III modul: Pumbo/Luma contributors.
+Povezano izvorno stablo Luma SHA:
+30c4045a47edc1a175646bd8a0e18b89778f91e5
+AMD FidelityFX SDK 2.4 SHA:
+7539ae8b6568ad29ed78a753404351daf3b5cca7
+Originalni Luma release: latest-840 (16.11.2026).
+Originalni Modern Tweaks dinput8.dll NIJE redistribuiran.
+
+Ako igra nece da se pokrene ili je slika pokvarena, odmah izadji
+i pokreni povratak pre instalacije. Ne koristi paket za redovno
+igranje pre uspesne provere.
