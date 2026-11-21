@@ -287,9 +287,11 @@ bool readOnlySignature(ID3D11DeviceContext* ctx, UINT vertices, UINT first,
                        ComPtr<ID3D11ShaderResourceView>& scene,
                        ComPtr<ID3D11RenderTargetView>& output,
                        ComPtr<ID3D11PixelShader>& shader) {
-    if(!ctx || vertices!=6 || first!=0)return false;
-    // The game's fullscreen TAA uses Draw(6,0), not DrawIndexed.
-    // Do not assume that every Draw(6,0) is TAA.
+    if(!ctx || first!=0 || (vertices!=3 && vertices!=4 && vertices!=6))
+        return false;
+    // Only full-screen triangle/quad patterns are eligible. Exact shader
+    // identity, camera and real temporal resources must ALSO be verified.
+    // Do not assume that any one Draw vertex count identifies TAA.
     ctx->PSGetShader(&shader,nullptr,nullptr);
     ctx->PSGetShaderResources(0,1,&scene);
     ctx->OMGetRenderTargets(1,&output,nullptr);
