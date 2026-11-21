@@ -61,8 +61,8 @@ try {
   foreach ($name in @('dinput8.dll','mafia_f8_experimental.dll','mafia_taa_trace.dll') + $new) {
     $from=Join-Path $PSScriptRoot $name
     $dest=Join-Path $GameDir $name
+    if (-not (Test-Path -LiteralPath $dest)) { $created += $dest }
     Copy-Item -LiteralPath $from -Destination $dest -Force -ErrorAction Stop
-    if ($name -in $new) { $created+=$dest }
   }
   $config=Join-Path $GameDir 'MafiaF8_test.ini'
   Set-Content -LiteralPath $config -Encoding Ascii -Value @(
@@ -72,14 +72,11 @@ try {
     ConvertTo-Json | Set-Content -LiteralPath $manifest -Encoding UTF8 -ErrorAction Stop
   foreach ($name in $replace) {
     $temp=Join-Path $GameDir ($name+'.pre_v9.bak')
-    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
+    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
   }
   Write-Host 'v9 installed. Original Modern Tweaks backup retained.' -ForegroundColor Green
   Write-Host 'Start Mafia III through Steam, play 30 seconds, then send MafiaFsrDraw.log and MafiaF8_loader.log.'
 } catch {
-  foreach ($pair in $backed) {
-    # Backed is a sequence of absolute file path / temporary path pairs.
-  }
   for ($i=0; $i -lt $backed.Count; $i+=2) {
     Copy-Item -LiteralPath $backed[$i+1] -Destination $backed[$i] -Force
     Remove-Item -LiteralPath $backed[$i+1] -Force
