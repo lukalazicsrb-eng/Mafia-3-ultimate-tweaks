@@ -109,7 +109,6 @@ try {
 } finally {
   if (-not $allSuccess) {
     Write-Host 'Installation interrupted; restoring existing files.' -ForegroundColor Yellow
-    foreach ($row in @($records)[-1..-($records.Count)] ) { }
     [array]::Reverse($records)
     foreach ($row in $records) {
       $dst=Join-Path $GameDir $row.rel
