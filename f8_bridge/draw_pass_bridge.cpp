@@ -23,6 +23,8 @@
 #include <string>
 #include <sstream>
 #include <utility>
+#include <unordered_set>
+#include <algorithm>
 
 #include "../probe/live_fsr_api.h"
 #include "menu_state.h"
@@ -180,58 +182,104 @@ std::string describe(const char* name,const ResourceDescription& r) {
     else s<<r.width<<'x'<<r.height<<":fmt="<<r.resourceFormat<<":view="<<r.viewFormat;
     return s.str();
 }
+// V10: log multiple Draw topology sizes instead of assuming all TAA is
+// Draw(6,0). The upstream Mafia III Luma implementation manually uses
+// Draw(6,0) for a *different* pre-TAA copy, so the old heuristic was wrong.
+// These samples are diagnostics, not actual validation for FSR.
+std::atomic<std::uint64_t> draw3Calls{0},draw4Calls{0},drawOtherCalls{0};
+std::mutex shaderTraceMutex;
+std::unordered_set<std::uintptr_t> observedShaderPointers;
+std::atomic<unsigned> totalLogged{0}, hdrLogged{0};
+
+std::atomic<std::uint64_t>& categoryCounter(UINT vertices) {
+    if(vertices==3)return draw3Calls;
+    if(vertices==4)return draw4Calls;
+    if(vertices==6)return draw6Calls;
+    return drawOtherCalls;
+}
 void traceFullscreenDraw(ID3D11DeviceContext* ctx,UINT vertices,UINT first) {
     if(!fullscreenTraceEnabled.load(std::memory_order_relaxed))return;
-    const auto count=executedCalls.load(std::memory_order_relaxed);
-    if(count==1 || count==256 || count==4096) {
-        log("[Draw hook reached] total="+std::to_string(count)
-           +" Draw6="+std::to_string(draw6Calls.load())
-           +" candidates="+std::to_string(candidateCount.load()));
+    const auto total=executedCalls.load(std::memory_order_relaxed);
+    auto& bucket=categoryCounter(vertices);
+    const auto sequence=++bucket;
+    if(total==1 || total==1024 || total==8192 || total==32768 || total==131072) {
+        log("[Draw summary] total="+std::to_string(total)
+            +" Draw3="+std::to_string(draw3Calls.load())
+            +" Draw4="+std::to_string(draw4Calls.load())
+            +" Draw3="+std::to_string(draw3Calls.load())
+        +" Draw4="+std::to_string(draw4Calls.load())
+        +" Draw6="+std::to_string(draw6Calls.load())
+        +" Other="+std::to_string(drawOtherCalls.load())
+            +" DrawOther="+std::to_string(drawOtherCalls.load())
+            +" HDRCandidates="+std::to_string(candidateCount.load())
+            +" shaders="+std::to_string(observedShaderPointers.size()));
     }
-    if(!ctx || vertices!=6 || first!=0)return;
-    const auto n=++draw6Calls;
-    // This is bounded to a small number of real D3D11 reads. It is
-    // independent of the previously unsuccessful DrawIndexed matcher.
-    if(n>4096 || (n>256 && n%16!=0))return;
-    ID3D11ShaderResourceView* srvs[3]{};
+    if(!ctx || first!=0)return;
+    // Keep this sampling bounded and avoid perturbing in-game frame timings.
+    // Samples extend beyond the first loading/menu draws, which dominated v9.
+    const bool inspect = (sequence<=16)
+        || (sequence<=256 && sequence%16==0)
+        || (sequence<=8192 && sequence%128==0)
+        || (sequence<=131072 && sequence%2048==0);
+    if(!inspect)return;
+    ID3D11ShaderResourceView* views[3]{};
     ComPtr<ID3D11PixelShader> shader;
     ComPtr<ID3D11RenderTargetView> output;
     ComPtr<ID3D11DepthStencilView> depth;
     ctx->PSGetShader(&shader,nullptr,nullptr);
-    ctx->PSGetShaderResources(0,3,srvs);
+    ctx->PSGetShaderResources(0,3,views);
     ctx->OMGetRenderTargets(1,&output,&depth);
-    ResourceDescription inputs[3]{};
+    ResourceDescription input[3]{};
     for(int i=0;i<3;++i) {
-        inputs[i]=describeView(srvs[i]);
-        if(srvs[i])srvs[i]->Release();
+        input[i]=describeView(views[i]);
+        if(views[i])views[i]->Release();
     }
     const auto rt=describeView(output.Get());
     const auto ds=describeView(depth.Get());
-    const bool colorMatch=inputs[0].valid && inputs[0].resourceFormat==DXGI_FORMAT_R11G11B10_FLOAT
-       && rt.valid && rt.resourceFormat==DXGI_FORMAT_R11G11B10_FLOAT
-       && inputs[0].width==rt.width && inputs[0].height==rt.height;
-    const bool motionLike=inputs[2].valid
-        && inputs[2].resourceFormat==DXGI_FORMAT_R16G16B16A16_FLOAT
-        && inputs[2].width==rt.width && inputs[2].height==rt.height;
-    const bool historyLike=inputs[1].valid
-        && inputs[1].resourceFormat==DXGI_FORMAT_R11G11B10_FLOAT
-        && inputs[1].width==rt.width && inputs[1].height==rt.height;
-    const bool strictCandidate=colorMatch && historyLike && motionLike;
-    const auto hit=strictCandidate ? ++candidateCount : 0;
-    // First samples show caller ordering; later log only promising
-    // signatures, for no more than 20 candidate lines.
-    const bool shouldLog=n<=24 || (strictCandidate && hit<=20)
-        || n==256 || n==1024 || n==4096;
-    if(!shouldLog)return;
-    if(++traceLines>70)return;
-    std::ostringstream s;
-    s<<"[Fullscreen Draw6 "<<n<<"] shader=0x"<<std::hex
-     <<reinterpret_cast<std::uintptr_t>(shader.Get())<<std::dec
-     <<" strictTaaCandidate="<<(strictCandidate?1:0)
-     <<" "<<describe("t0",inputs[0])<<" "<<describe("t1",inputs[1])
-     <<" "<<describe("t2",inputs[2])<<" "<<describe("RTV0",rt)
-     <<" "<<describe("DSV",ds);
-    log(s.str());
+    const auto shaderPtr=reinterpret_cast<std::uintptr_t>(shader.Get());
+    bool newShader=false;
+    unsigned uniqueShaders=0;
+    {
+        std::lock_guard<std::mutex> lock(shaderTraceMutex);
+        const auto insert=observedShaderPointers.insert(shaderPtr);
+        newShader=insert.second;
+        uniqueShaders=static_cast<unsigned>(observedShaderPointers.size());
+    }
+    const bool hdrColor = input[0].valid
+        && (input[0].viewFormat==DXGI_FORMAT_R11G11B10_FLOAT
+            || input[0].resourceFormat==DXGI_FORMAT_R11G11B10_FLOAT);
+    const bool hdrOutput = rt.valid
+        && (rt.viewFormat==DXGI_FORMAT_R11G11B10_FLOAT
+            || rt.resourceFormat==DXGI_FORMAT_R11G11B10_FLOAT);
+    const bool matchingDimensions = input[0].valid && rt.valid
+        && input[0].width==rt.width && input[0].height==rt.height;
+    const bool hdrCandidate=hdrColor && hdrOutput && matchingDimensions;
+    if(hdrCandidate) ++candidateCount;
+    const auto logOrdinal=++traceLines;
+    // Include normal examples, new shaders and every 8th HDR candidate.
+    // 96 lines total to avoid giant logs and per-frame disk writes.
+    const bool interesting=(sequence<=8)
+        || (newShader && uniqueShaders<=40)
+        || (hdrCandidate && hdrLogged.load()<32)
+        || (sequence==256 || sequence==1024 || sequence==8192);
+    if(!interesting || logOrdinal>96)return;
+    if(hdrCandidate)++hdrLogged;
+    ++totalLogged;
+    std::ostringstream line;
+    line<<"[Draw V10] total="<<total<<" verts="<<vertices
+        <<" first="<<first<<" bucket="<<sequence
+        <<" thread="<<GetCurrentThreadId()
+        <<" context=0x"<<std::hex<<reinterpret_cast<std::uintptr_t>(ctx)
+        <<" ps=0x"<<shaderPtr<<std::dec
+        <<" newPS="<<(newShader?1:0)
+        <<" hdrCandidate="<<(hdrCandidate?1:0)
+        <<" shaderCount="<<uniqueShaders
+        <<" "<<describe("t0",input[0])
+        <<" "<<describe("t1",input[1])
+        <<" "<<describe("t2",input[2])
+        <<" "<<describe("rtv",rt)
+        <<" "<<describe("dsv",ds);
+    log(line.str());
 }
 
 bool readOnlySignature(ID3D11DeviceContext* ctx, UINT vertices, UINT first,
@@ -451,9 +499,9 @@ extern "C" __declspec(dllexport) BOOL __cdecl MafiaFsrInstallDrawHookV1(HMODULE 
     if(GetModuleFileNameW(originalMod,modPath,32768))
         logPath=std::filesystem::path(modPath).parent_path()/L"MafiaFsrDraw.log";
     {std::ofstream clear(logPath,std::ios::trunc);}
-    log("Fullscreen Draw callback v1: exact mod hash and original call verified.");
+    log("Fullscreen Draw callback V10: verified original mod; captures Draw3/4/6/other.");
     log("No actual FSR activated until trusted producer supplies depth, motion and camera.");
-    log("Fullscreen tracing is available via MafiaFsrEnableDrawTraceV1.");
+    log("Draw profiler V10: handles all vertex counts, not just Draw(6,0).");
     log("Candidate shader identity/texture descriptors are NOT proof of valid FSR inputs.");
     DWORD before=0;
     if(!VirtualProtect(site,6,PAGE_EXECUTE_READWRITE,&before)) {
