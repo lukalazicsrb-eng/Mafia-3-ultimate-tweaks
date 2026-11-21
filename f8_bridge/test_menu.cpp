@@ -16,6 +16,14 @@ int main() {
     syntheticOnly.providerIs412=true;
     syntheticOnly.dx11Dx12BridgeReady=true;
     assert(!menu.select(Mode::NativeAa,syntheticOnly).accepted);
+    BackendEvidence preview{};
+    preview.providerIs412=true;
+    preview.dx11Dx12BridgeReady=true;
+    preview.temporalInputsValidated=true;
+    preview.shadowGameFrameDispatchSucceeded=true;
+    assert(!menu.select(Mode::NativeAa,preview).accepted); // no verified output handoff
+    preview.outputHandoffValidated=true;
+    assert(menu.select(Mode::NativeAa,preview).accepted);
     BackendEvidence inGame{true,true,true,true,true,false};
     auto aa = menu.select(Mode::NativeAa,inGame);
     assert(aa.accepted && aa.originalIndex == 1);
