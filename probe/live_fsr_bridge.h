@@ -53,7 +53,8 @@ public:
     bool process(ID3D11DeviceContext* actualGameContext,
                  const LiveFrameTextures& textures,
                  const LiveFrameEvidence& verified,
-                 const FsrFrameParameters& cameraAndTiming) noexcept;
+                 const FsrFrameParameters& cameraAndTiming,
+                 bool presentToGame = true) noexcept;
 
     const std::string& provider() const noexcept;
     const std::string& lastError() const noexcept;
