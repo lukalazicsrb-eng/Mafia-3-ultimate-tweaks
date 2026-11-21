@@ -1,26 +1,38 @@
-# Mafia III F8 + TAA capture v5 (Windows x64)
+MAFIA III – TAA DIJAGNOSTIKA V6 (Windows x64)
 
-THIS IS AN EXPERIMENTAL DIAGNOSTIC, NOT WORKING FSR 4.1.2.
+OVO NIJE UKLJUCEN FSR! V6 belezi prve TAA hook pozive; ne dira sliku i ne
+pokrece AMD FSR u igri. FSR opcije u F8 i dalje su [unavailable].
 
-IF YOU ALREADY INSTALLED THE WORKING F8 v4.1 BETA:
-1. Close Mafia III.
-2. Double-click "Nadogradi TAA test.cmd".
-3. Enter your game folder and type TRACE when requested.
-4. Open Mafia III through STEAM.
-5. Walk or rotate camera for about 30 seconds. Then exit normally.
-6. Send MafiaTaaTrace.log and MafiaF8_loader.log from the game folder.
-7. Run "Vrati originalni mod.cmd" to restore the original after testing.
+AKO IMAS INSTALIRANU V5 TAA DIJAGNOSTIKU:
+1. Potpuno ugasi Mafia III.
+2. Raspakuj novi ZIP u poseban folder.
+3. Pokreni "Nadogradi TAA v6.cmd".
+4. Unesi putanju foldera igre i potvrdi sa V6. Skripta proverava da je
+   prethodni TAA DLL bas originalni V5 i menja samo njega.
+5. Pokreni Mafia III preko STEAMA (NE direktno preko EXE).
+6. F8 -> Visuals -> Anti-aliasing: izaberi "Game's TAA".
+7. Ucitaj sejv, hodaj i okreci kameru 30-60 sekundi, pa izadji normalno.
+8. Posalji MafiaTaaTrace.log i MafiaF8_loader.log iz foldera igre.
 
-IF YOU RESTORED ORIGINAL MOD FIRST:
-1. Run "Instaliraj beta test.cmd".
-2. Type your game folder and confirm TEST.
-3. Launch through Steam; follow steps 5-7 above.
+AKO IMAS SAMO V4.1 F8 BETA:
+Pokreni "Nadogradi TAA v6.cmd"; pozvace instalaciju dijagnostike,
+uz proveru postojecih DLL-ova. Ako skripta prijavi da postoje nepoznati
+fajlovi, NE brisi ih naslepo.
 
-MafiaTaaTrace.log records D3D11 texture formats/dimensions only.
-No real FSR game-frame processing is installed; FSR menu choices remain [unavailable].
+AKO SI VRATIO ORIGINALNI MOD:
+Pokreni "Instaliraj beta test.cmd", potvrdi TEST i onda testiraj kao gore.
 
-If the game fails to launch, restore dinput8.dll from the backed-up
-dinput8.ModernTweaks.2.5.1.bak file with the game fully closed.
+KAKO VRATITI ORIGINAL:
+Ugasi Mafiju, zatim pokreni "Vrati originalni mod.cmd".
+Skripta proverava verzije i koristi rezervnu kopiju originalnog moda.
+Ako to ne radi, uz ugasenu igru rucno vrati fajl
+dinput8.ModernTweaks.2.5.1.bak na ime dinput8.dll uz sacuvanu kopiju.
 
-Safety: the scripts verify the exact original Modern Tweaks v2.5.1 SHA-256.
-Only use this with the original mod version. This beta has not been tested in game.
+TUMACENJE LOGA:
+- [Hook reached]: poziv do naseg presretaca zaista je izvrsen.
+- [Draw6 sample]: uhvaceni parametri iz igre; format je samo kandidat,
+  nije dokaz da je potpuno validiran za AMD FSR.
+- Samo pocetne 4-5 poruke: hook nije prijavio draw tokom testa;
+  treba proveriti igru / TAA postavku / drugu tacku dijagnostike.
+- Svi logovi se otvaraju kao nov zapis za svaku v6 sesiju.
+Ne ukljucuj ovo kao trajni mod za igranje.
