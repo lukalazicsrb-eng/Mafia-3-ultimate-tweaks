@@ -33,6 +33,12 @@ if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
     target_link_libraries(mafia_fsr_gamepass PRIVATE bcrypt d3d11 dxgi)
     target_compile_definitions(mafia_fsr_gamepass PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 
+    add_executable(test_fsr_gamepass_guard test_gamepass_guard.cpp)
+    target_compile_features(test_fsr_gamepass_guard PRIVATE cxx_std_17)
+    target_link_libraries(test_fsr_gamepass_guard PRIVATE mafia_fsr_gamepass mafia_menu_state)
+    add_test(NAME gamepass_guard COMMAND test_fsr_gamepass_guard)
+
+
     # The only DLL that replaces the original on an explicitly opt-in beta install.
     add_library(mafia_input_proxy SHARED dinput8_proxy.cpp)
     set_target_properties(mafia_input_proxy PROPERTIES OUTPUT_NAME "dinput8")
