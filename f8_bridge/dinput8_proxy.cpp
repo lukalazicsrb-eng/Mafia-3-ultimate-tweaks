@@ -4,7 +4,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
-#include <dinput.h>
+#include <unknwn.h> // REFIID and LPUNKNOWN, without dinput8.dll import declaration
 #include <filesystem>
 #include <fstream>
 #include <string>
