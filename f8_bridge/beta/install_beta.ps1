@@ -1,7 +1,7 @@
 param([string]$GameDir)
 $ErrorActionPreference = 'Stop'
 $expected = '529b16daec59e2ce5c735e5c8e7974662b647591da2847c53a16f165a479e900'
-Write-Host 'EXPERIMENTAL F8 MENU BETA - THIS DOES NOT ENABLE AMD FSR' -ForegroundColor Yellow
+Write-Host 'MAFIA III v9: F8 + FULLSCREEN DRAW CAPTURE (FSR remains disabled)' -ForegroundColor Yellow
 if (-not $GameDir) {
   $default = 'D:\SteamLibrary\steamapps\common\Mafia III'
   $GameDir = Read-Host "Enter Mafia III game folder (example: $default)"
@@ -14,17 +14,21 @@ $backup = Join-Path $GameDir 'dinput8.ModernTweaks.2.5.1.bak'
 $renamed = Join-Path $GameDir 'ModernTweaks_original.dll'
 $adapter = Join-Path $GameDir 'mafia_f8_experimental.dll'
 $probe = Join-Path $GameDir 'mafia_taa_trace.dll'
+$gamepass = Join-Path $GameDir 'mafia_fsr_gamepass.dll'
+$backend = Join-Path $GameDir 'mafia_live_fsr_backend.dll'
 $config = Join-Path $GameDir 'MafiaF8_test.ini'
 $manifest = Join-Path $GameDir 'MafiaF8_install.json'
 $proxySrc = Join-Path $PSScriptRoot 'dinput8.dll'
 $adapterSrc = Join-Path $PSScriptRoot 'mafia_f8_experimental.dll'
 $probeSrc = Join-Path $PSScriptRoot 'mafia_taa_trace.dll'
+$gamepassSrc = Join-Path $PSScriptRoot 'mafia_fsr_gamepass.dll'
+$backendSrc = Join-Path $PSScriptRoot 'mafia_live_fsr_backend.dll'
 if (-not (Test-Path -LiteralPath $exe)) { throw 'mafia3definitiveedition.exe not found.' }
 if (-not (Test-Path -LiteralPath $original)) { throw 'Original Modern Tweaks dinput8.dll not found.' }
-foreach ($p in @($backup, $renamed, $adapter, $probe, $config, $manifest)) {
+foreach ($p in @($backup, $renamed, $adapter, $probe, $gamepass, $backend, $config, $manifest)) {
   if (Test-Path -LiteralPath $p) { throw "File already exists, refusing to overwrite: $p" }
 }
-foreach ($p in @($proxySrc, $adapterSrc, $probeSrc)) {
+foreach ($p in @($proxySrc, $adapterSrc, $probeSrc, $gamepassSrc, $backendSrc)) {
   if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { throw "Missing compiled beta DLL: $p" }
 }
 $currentHash = (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -40,16 +44,18 @@ try {
   Copy-Item -LiteralPath $proxySrc -Destination $original -Force -ErrorAction Stop
   Copy-Item -LiteralPath $adapterSrc -Destination $adapter -ErrorAction Stop
   Copy-Item -LiteralPath $probeSrc -Destination $probe -ErrorAction Stop
-  Set-Content -LiteralPath $config -Value @('EnableExperimentalF8=1','EnableTaaTrace=1') -Encoding Ascii -ErrorAction Stop
+  Copy-Item -LiteralPath $gamepassSrc -Destination $gamepass -ErrorAction Stop
+  Copy-Item -LiteralPath $backendSrc -Destination $backend -ErrorAction Stop
+  Set-Content -LiteralPath $config -Value @('EnableExperimentalF8=1','EnableTaaTrace=0','EnableFsrDrawTrace=1') -Encoding Ascii -ErrorAction Stop
   $proxyHash = (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash.ToLowerInvariant()
   @{ originalSha256=$expected; proxySha256=$proxyHash } |
     ConvertTo-Json | Set-Content -LiteralPath $manifest -Encoding UTF8 -ErrorAction Stop
   Write-Host 'Beta installed. Launch game THROUGH STEAM (not directly from EXE).' -ForegroundColor Green
-  Write-Host 'Open F8 -> Visuals -> AA; FSR choices should be [unavailable]. Play 30s and send MafiaTaaTrace.log.'
-  Write-Host 'Send MafiaF8_loader.log, ModernTweaks.log, and a screenshot of the menu.'
+  Write-Host 'Open F8 -> Visuals -> AA; FSR choices should be [unavailable]. Play 30s and send MafiaFsrDraw.log.'
+  Write-Host 'Send MafiaFsrDraw.log and MafiaF8_loader.log. No need to resend old TAA logs.'
 } catch {
   if (Test-Path -LiteralPath $backup) { Copy-Item -LiteralPath $backup -Destination $original -Force }
-  foreach ($p in @($renamed,$adapter,$probe,$config,$manifest,$backup)) {
+  foreach ($p in @($renamed,$adapter,$probe,$gamepass,$backend,$config,$manifest,$backup)) {
     if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
   }
   throw
