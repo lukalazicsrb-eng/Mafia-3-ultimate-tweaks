@@ -72,6 +72,19 @@ extern "C" __declspec(dllexport) int __cdecl MafiaFsrProcessNativeAaV1(
         gameContext, inputs, convert(*evidence), convert(*camera)) ? 1 : 0;
 }
 
+extern "C" __declspec(dllexport) int __cdecl MafiaFsrPreviewNativeAaV1(
+    void* session, ID3D11DeviceContext* gameContext,
+    ID3D11ShaderResourceView* color, ID3D11ShaderResourceView* depth,
+    ID3D11ShaderResourceView* motion, ID3D11RenderTargetView* output,
+    const MafiaFsrFrameEvidenceV1* evidence, const MafiaFsrCameraV1* camera) {
+    if (!session || !evidence || !camera
+        || evidence->size != sizeof(MafiaFsrFrameEvidenceV1)
+        || camera->size != sizeof(MafiaFsrCameraV1)) return 0;
+    const LiveFrameTextures inputs{color, depth, motion, output};
+    return static_cast<LiveNativeAaBridge*>(session)->process(
+        gameContext, inputs, convert(*evidence), convert(*camera), false) ? 1 : 0;
+}
+
 extern "C" __declspec(dllexport) const char* __cdecl MafiaFsrProviderV1(void* session) {
     return session ? static_cast<LiveNativeAaBridge*>(session)->provider().c_str() : "";
 }
