@@ -17,7 +17,7 @@ if (Test-Path -LiteralPath $original) {
   if ($nowHash -ne $record.proxySha256) { throw 'The active dinput8.dll was modified; refusing to overwrite it.' }
 }
 Copy-Item -LiteralPath $backup -Destination $original -Force
-foreach ($p in @('ModernTweaks_original.dll','mafia_f8_experimental.dll','MafiaF8_test.ini',
+foreach ($p in @('ModernTweaks_original.dll','mafia_f8_experimental.dll','mafia_taa_trace.dll','MafiaF8_test.ini',
                  'dinput8.ModernTweaks.2.5.1.bak','MafiaF8_install.json')) {
   $target = Join-Path $GameDir $p
   if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Force }
