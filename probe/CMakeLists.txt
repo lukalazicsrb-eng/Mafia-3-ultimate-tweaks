@@ -28,6 +28,12 @@ target_include_directories(mafia_live_fsr_backend SYSTEM PRIVATE
     "${fsr_kit}/api/include" "${fsr_kit}/upscalers/include")
 target_link_libraries(mafia_live_fsr_backend PRIVATE d3d11 d3d12 d3dcompiler dxgi)
 set_target_properties(mafia_live_fsr_backend PROPERTIES OUTPUT_NAME mafia_live_fsr_backend)
+enable_testing()
+add_executable(test_live_fsr_abi test_live_fsr_abi.cpp)
+target_compile_features(test_live_fsr_abi PRIVATE cxx_std_17)
+target_link_libraries(test_live_fsr_abi PRIVATE mafia_live_fsr_backend)
+add_test(NAME live_fsr_abi_guard COMMAND test_live_fsr_abi)
+
 
 
 if(MSVC)
