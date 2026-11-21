@@ -67,6 +67,18 @@ MAFIA_FSR_API int __cdecl MafiaFsrProcessNativeAaV1(
     const MafiaFsrFrameEvidenceV1* evidence,
     const MafiaFsrCameraV1* camera);
 
+// Preflight: real-game AMD dispatch, without changing the game's framebuffer.
+// Successful preflight is necessary but not sufficient for showing FSR as enabled.
+MAFIA_FSR_API int __cdecl MafiaFsrPreviewNativeAaV1(
+    void* session,
+    struct ID3D11DeviceContext* gameImmediateContext,
+    struct ID3D11ShaderResourceView* preTaaColor,
+    struct ID3D11ShaderResourceView* realDepth,
+    struct ID3D11ShaderResourceView* realRawMotion,
+    struct ID3D11RenderTargetView* preHudOutput,
+    const MafiaFsrFrameEvidenceV1* evidence,
+    const MafiaFsrCameraV1* camera);
+
 MAFIA_FSR_API const char* __cdecl MafiaFsrProviderV1(void* session);
 MAFIA_FSR_API const char* __cdecl MafiaFsrLastErrorV1(void* session);
 MAFIA_FSR_API void __cdecl MafiaFsrDestroyV1(void* session);
