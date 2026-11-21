@@ -13,16 +13,18 @@ $original = Join-Path $GameDir 'dinput8.dll'
 $backup = Join-Path $GameDir 'dinput8.ModernTweaks.2.5.1.bak'
 $renamed = Join-Path $GameDir 'ModernTweaks_original.dll'
 $adapter = Join-Path $GameDir 'mafia_f8_experimental.dll'
+$probe = Join-Path $GameDir 'mafia_taa_trace.dll'
 $config = Join-Path $GameDir 'MafiaF8_test.ini'
 $manifest = Join-Path $GameDir 'MafiaF8_install.json'
 $proxySrc = Join-Path $PSScriptRoot 'dinput8.dll'
 $adapterSrc = Join-Path $PSScriptRoot 'mafia_f8_experimental.dll'
+$probeSrc = Join-Path $PSScriptRoot 'mafia_taa_trace.dll'
 if (-not (Test-Path -LiteralPath $exe)) { throw 'mafia3definitiveedition.exe not found.' }
 if (-not (Test-Path -LiteralPath $original)) { throw 'Original Modern Tweaks dinput8.dll not found.' }
-foreach ($p in @($backup, $renamed, $adapter, $config, $manifest)) {
+foreach ($p in @($backup, $renamed, $adapter, $probe, $config, $manifest)) {
   if (Test-Path -LiteralPath $p) { throw "File already exists, refusing to overwrite: $p" }
 }
-foreach ($p in @($proxySrc, $adapterSrc)) {
+foreach ($p in @($proxySrc, $adapterSrc, $probeSrc)) {
   if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { throw "Missing compiled beta DLL: $p" }
 }
 $currentHash = (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -37,16 +39,17 @@ try {
   Copy-Item -LiteralPath $original -Destination $renamed -ErrorAction Stop
   Copy-Item -LiteralPath $proxySrc -Destination $original -Force -ErrorAction Stop
   Copy-Item -LiteralPath $adapterSrc -Destination $adapter -ErrorAction Stop
-  Set-Content -LiteralPath $config -Value 'EnableExperimentalF8=1' -Encoding Ascii -ErrorAction Stop
+  Copy-Item -LiteralPath $probeSrc -Destination $probe -ErrorAction Stop
+  Set-Content -LiteralPath $config -Value @('EnableExperimentalF8=1','EnableTaaTrace=1') -Encoding Ascii -ErrorAction Stop
   $proxyHash = (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash.ToLowerInvariant()
   @{ originalSha256=$expected; proxySha256=$proxyHash } |
     ConvertTo-Json | Set-Content -LiteralPath $manifest -Encoding UTF8 -ErrorAction Stop
   Write-Host 'Beta installed. Launch game THROUGH STEAM (not directly from EXE).' -ForegroundColor Green
-  Write-Host 'Open F8 -> Visuals -> AA and see whether four FSR choices appear as [unavailable].'
+  Write-Host 'Open F8 -> Visuals -> AA; FSR choices should be [unavailable]. Play 30s and send MafiaTaaTrace.log.'
   Write-Host 'Send MafiaF8_loader.log, ModernTweaks.log, and a screenshot of the menu.'
 } catch {
   if (Test-Path -LiteralPath $backup) { Copy-Item -LiteralPath $backup -Destination $original -Force }
-  foreach ($p in @($renamed,$adapter,$config,$manifest,$backup)) {
+  foreach ($p in @($renamed,$adapter,$probe,$config,$manifest,$backup)) {
     if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
   }
   throw
