@@ -69,9 +69,12 @@ jobs:
           Copy-Item build-probe/Release/mafia_live_fsr_backend.dll package/mafia_live_fsr_backend.dll
           Copy-Item f8_bridge/beta/install_beta.ps1 package/
           Copy-Item f8_bridge/beta/upgrade_v9.ps1 package/
+          Copy-Item f8_bridge/beta/upgrade_draw_v10.ps1 package/
+          Copy-Item f8_bridge/beta/install_or_upgrade_v10.ps1 package/
+          Copy-Item 'f8_bridge/beta/Instaliraj ili Nadogradi v10.cmd' package/
           Copy-Item f8_bridge/beta/install_or_upgrade_v9.ps1 package/
           Copy-Item f8_bridge/beta/uninstall_beta.ps1 package/
-          Copy-Item 'f8_bridge/beta/Instaliraj ili Nadogradi v9.cmd' package/
+          # v10 one-click entrypoint supersedes v9
           Copy-Item 'f8_bridge/beta/Vrati originalni mod.cmd' package/
           Copy-Item f8_bridge/beta/PROCITAJ.txt package/
           Copy-Item f8_bridge/README.md package/F8_SOURCE_README.md
@@ -94,7 +97,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: MafiaIII-v9-FSR-DirectDraw-Game-Test-NO-FSR-YET
+          name: MafiaIII-v10-MultiDraw-FSR-TAA-Discovery-Win64-NO-FSR
           path: package/*
           if-no-files-found: error
           retention-days: 14
