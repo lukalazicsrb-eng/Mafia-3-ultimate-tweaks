@@ -283,20 +283,20 @@ extern "C" __declspec(dllexport) BOOL __cdecl MafiaFsrInstallDrawHookV1(HMODULE 
     if(site+6+offset!=base+originalDrawSlotRva)return FALSE;
     auto slot=reinterpret_cast<OriginalDraw*>(base+originalDrawSlotRva);
     if(!slot || !*slot)return FALSE;
-    auto near=nearRelay(reinterpret_cast<std::uintptr_t>(site));
-    if(!near)return FALSE;
-    auto diff=reinterpret_cast<std::intptr_t>(near) -
+    void* relayPage=nearRelay(reinterpret_cast<std::uintptr_t>(site));
+    if(!relayPage)return FALSE;
+    auto diff=reinterpret_cast<std::intptr_t>(relayPage) -
               reinterpret_cast<std::intptr_t>(site+5);
     if(diff<std::numeric_limits<std::int32_t>::min() ||
        diff>std::numeric_limits<std::int32_t>::max()) {
-        VirtualFree(near,0,MEM_RELEASE);return FALSE;
+        VirtualFree(relayPage,0,MEM_RELEASE);return FALSE;
     }
     std::array<unsigned char,12> trampoline{{0x48,0xB8}};
     auto target=reinterpret_cast<std::uintptr_t>(&onDraw);
     std::memcpy(trampoline.data()+2,&target,8);
     trampoline[10]=0xFF;trampoline[11]=0xE0;
-    std::memcpy(near,trampoline.data(),trampoline.size());
-    FlushInstructionCache(GetCurrentProcess(),near,trampoline.size());
+    std::memcpy(relayPage,trampoline.data(),trampoline.size());
+    FlushInstructionCache(GetCurrentProcess(),relayPage,trampoline.size());
     std::array<unsigned char,6> replace{{0xE8,0,0,0,0,0x90}};
     auto rel32=static_cast<std::int32_t>(diff);
     std::memcpy(replace.data()+1,&rel32,4);
@@ -310,13 +310,13 @@ extern "C" __declspec(dllexport) BOOL __cdecl MafiaFsrInstallDrawHookV1(HMODULE 
     DWORD before=0;
     if(!VirtualProtect(site,6,PAGE_EXECUTE_READWRITE,&before)) {
         originalDraw=nullptr;
-        VirtualFree(near,0,MEM_RELEASE);
+        VirtualFree(relayPage,0,MEM_RELEASE);
         return FALSE;
     }
     std::memcpy(site,replace.data(),replace.size());
     FlushInstructionCache(GetCurrentProcess(),site,replace.size());
     DWORD ignored=0;VirtualProtect(site,6,before,&ignored);
-    relay=near;callsite=site;
+    relay=relayPage;callsite=site;
     installed.store(true,std::memory_order_release);
     return TRUE;
 }
