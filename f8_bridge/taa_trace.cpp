@@ -23,7 +23,7 @@ const std::array<unsigned char,5> ORIGINAL_CALL{{0xe8,0x8e,0xa5,0x00,0x00}};
 using Matcher = bool(__fastcall*)(ID3D11DeviceContext*,UINT,UINT);
 Matcher originalMatcher=nullptr;
 std::filesystem::path logPath;
-std::atomic<unsigned> draws{0}, candidates{0}, matcherSuccess{0};
+std::atomic<unsigned> allMatcherCalls{0}, draws{0}, candidates{0}, matcherSuccess{0};
 void log(const std::string& message) {
     if(logPath.empty()) return;
     std::ofstream f(logPath,std::ios::app);
@@ -120,28 +120,42 @@ bool isCandidate(const Bound& b){
 bool __fastcall traceDraw(ID3D11DeviceContext* ctx,UINT vertexCount,UINT firstVertex){
     auto orig=originalMatcher;
     if(!orig)return false;
-    if(!ctx||vertexCount!=6||firstVertex!=0)return orig(ctx,vertexCount,firstVertex);
-    unsigned n=++draws;
-    const bool shouldCapture=n<=2048&&candidates.load()<8;
-    Bound before{};
-    if(shouldCapture) before=getBound(ctx);
+    const unsigned total=++allMatcherCalls;
+    const bool eligible=(ctx!=nullptr && vertexCount==6 && firstVertex==0);
+    const unsigned eligibleIndex=eligible ? ++draws : 0;
+    // V5 could silently collect zero lines when no signature matched and
+    // fewer than 256 eligible draws ran. V6 always logs the first call.
+    if(total<=4 || total==32 || total==512 || total==4096){
+        std::ostringstream entry;
+        entry<<"[Hook reached] total="<<total
+             <<" vertexCount="<<vertexCount<<" firstVertex="<<firstVertex
+             <<" context="<<(ctx?"present":"null")
+             <<" eligible_Draw6="<<draws.load();
+        log(entry.str());
+    }
+    // Read-only bounded D3D11 descriptor sampling before the original match.
+    const bool takeSample=eligible && eligibleIndex<=8;
+    Bound bound{};
+    if(takeSample)bound=getBound(ctx);
     const bool handled=orig(ctx,vertexCount,firstVertex);
     if(handled)++matcherSuccess;
-    if(shouldCapture&&isCandidate(before)){
-        const auto hit=++candidates;
-        if(hit<=8){
-            std::ostringstream out;
-            out<<"[Candidate #"<<hit<<"] match_result="<<handled<<' '
-               <<label("color",before.t0)<<' '<<label("t1",before.t1)<<' '
-               <<label("motion",before.t2)<<' '<<label("output",before.rtv)
-               <<' '<<label("depth",before.depth);
-            log(out.str());
-        }
+    if(takeSample){
+        const bool signature=isCandidate(bound);
+        if(signature)++candidates;
+        std::ostringstream out;
+        out<<"[Draw6 sample #"<<eligibleIndex<<"] signature="<<(signature?1:0)
+           <<" original_matcher_result="<<(handled?1:0)
+           <<" thread="<<GetCurrentThreadId()<<" "
+           <<label("color",bound.t0)<<" "<<label("t1",bound.t1)<<" "
+           <<label("motion",bound.t2)<<" "<<label("output",bound.rtv)<<" "
+           <<label("depth",bound.depth);
+        log(out.str());
     }
-    if(n==256||n==2048){
-        log("[Summary] Draw(6,0)="+std::to_string(n)
-            +" format_candidates="+std::to_string(candidates.load())
-            +" original_matcher_handled="+std::to_string(matcherSuccess.load()));
+    if(total==32 || total==512 || total==4096){
+        log("[Summary] matcher_calls="+std::to_string(total)
+            +" Draw6="+std::to_string(draws.load())
+            +" matching_formatted_Draw6="+std::to_string(candidates.load())
+            +" original_matcher_success="+std::to_string(matcherSuccess.load()));
     }
     return handled;
 }
@@ -183,7 +197,10 @@ extern "C" __declspec(dllexport) BOOL __cdecl InstallTaaTrace(HMODULE module){
     std::memcpy(patched.data()+1,&d,4);
     wchar_t filename[32768]{};
     if(GetModuleFileNameW(module,filename,32768))logPath=std::filesystem::path(filename).parent_path()/"MafiaTaaTrace.log";
-    log("=== Mafia III Modern Tweaks read-only TAA resource probe ===");
+    // Start each capture with a fresh log instead of mixing prior sessions.
+    { std::ofstream fresh(logPath, std::ios::trunc); }
+    log("=== Mafia III Modern Tweaks read-only TAA resource probe V6 ===");
+    log("V6: immediate first-call trace; first 8 Draw(6,0) descriptors; bounded aggregate counters.");
     log("Mod DLL hash and original Draw matcher CALL RVA 0x796ed verified.");
     log("Only resource descriptors are read; no textures are modified and no FSR is used.");
     originalMatcher=reinterpret_cast<Matcher>(base+MATCHER_RVA);
