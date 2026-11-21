@@ -25,6 +25,14 @@ if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
     target_compile_features(mafia_taa_trace PRIVATE cxx_std_17)
     target_link_libraries(mafia_taa_trace PRIVATE bcrypt d3d11 dxgi)
 
+    # Standalone, version-locked live gamepass shim; not loaded by the normal beta.
+    # Actual raw motion/depth and camera producer is still required.
+    add_library(mafia_fsr_gamepass SHARED draw_pass_bridge.cpp)
+    target_compile_features(mafia_fsr_gamepass PRIVATE cxx_std_17)
+    target_include_directories(mafia_fsr_gamepass PRIVATE "../probe")
+    target_link_libraries(mafia_fsr_gamepass PRIVATE bcrypt d3d11 dxgi)
+    target_compile_definitions(mafia_fsr_gamepass PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+
     # The only DLL that replaces the original on an explicitly opt-in beta install.
     add_library(mafia_input_proxy SHARED dinput8_proxy.cpp)
     set_target_properties(mafia_input_proxy PROPERTIES OUTPUT_NAME "dinput8")
