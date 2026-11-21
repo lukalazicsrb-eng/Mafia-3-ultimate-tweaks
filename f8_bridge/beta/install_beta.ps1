@@ -8,6 +8,9 @@ if (-not $GameDir) {
 }
 if (-not (Test-Path -LiteralPath $GameDir -PathType Container)) { throw 'Game folder does not exist.' }
 $GameDir = (Resolve-Path -LiteralPath $GameDir).Path
+if (Get-Process -Name 'mafia3definitiveedition' -ErrorAction SilentlyContinue) {
+  throw 'Close Mafia III before installing; DLL files cannot be safely modified while in use.'
+}
 $exe = Join-Path $GameDir 'mafia3definitiveedition.exe'
 $original = Join-Path $GameDir 'dinput8.dll'
 $backup = Join-Path $GameDir 'dinput8.ModernTweaks.2.5.1.bak'
