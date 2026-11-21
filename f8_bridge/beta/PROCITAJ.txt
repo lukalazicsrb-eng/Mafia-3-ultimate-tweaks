@@ -1,62 +1,49 @@
-MAFIA III: DEFINITIVE EDITION — F8 / FSR 4.1.2 v9
-===================================================
-WINDOWS x64 / Modern Tweaks 2.5.1 / AMD RX 6700 XT
+MAFIA III FSR 4.1.2 — DIRECT DRAW PROFILER V10
+==================================================
+Windows x64 / Original Modern Tweaks v2.5.1
 
-VAZNO: v9 JE INSTALACIONI TEST, NIJE GOTOV FSR MOD.
+V10 JE INSTALACIONA DIJAGNOSTIKA. Pravi FSR nije jos aktiviran.
+FSR Native AA / Quality / Balanced / Performance ostaju [unavailable].
 
-Ova verzija stvarno presrece ORIGINALNI fullscreen DirectX 11 Draw
-prolaz i belezi shader i povezane teksture. Na osnovu loga mozemo
-pronaci pravi TAA pass, motion vectors, depth i podatke kamere.
-AMD FSR 4.1.2 backend DLL je ukljucen u ZIP, ali jos NE OBRAĐUJE
-stvarne frejmove Mafije jer nedostaju potvrdjeni temporalni ulazi.
-FSR Native AA, Quality, Balanced i Performance treba i dalje da budu
-[unavailable] u F8 meniju. To je namerna zastita.
+STA JE NOVO:
+- Log MafiaFsrDraw.log sada razlikuje Draw sa 3, 4, 6 i drugim brojem
+  verteksa. Raniji v9 log samo Draw(6,0) nije prepoznao nijedan HDR TAA
+  prolaz: sve zabelezene teksture t0 bile su uglavnom A8_UNORM
+  2048x2048 i pixel shader je bio isti.
+- Istraživanje Luma Framework Mafia III izvornog koda potvrdilo je da
+  ručni Draw(6,0) u tom modu nije dokaz da originalni TAA koristi 6
+  verteksa; zato sada trazimo sve potencijalne fullscreen pozive.
+- Log sada uključuje ID konteksta, vrstu Draw, shader pokazivac, formate
+  t0/t1/t2, RTV0/DSV i sazetak poziva, uz strogo ogranicen broj redova.
+- Kod ne menja GPU teksture i ne uključuje FSR; originalni TAA ostaje.
 
-KAKO DA INSTALIRAS (RADI I PREKO STARIJE F8 BETA VERZIJE)
-1. Potpuno ugasi Mafia III.
-2. Raspakuj CEO ovaj ZIP u neki poseban folder van igre.
-3. Pokreni "Instaliraj ili Nadogradi v9.cmd".
-4. Unesi putanju foldera gde je mafia3definitiveedition.exe.
-5. Ako imas originalni Modern Tweaks, upisi TEST za probnu instalaciju.
-   Ako imas nasu postojecu F8 beta verziju, upisi V9 za nadogradnju.
-   Skripta sama otkriva postojece stanje; ne prepisuje nepoznate DLL-ove.
-6. Pokreni Mafia III PREKO STEAMA, ne preko exe fajla.
-7. Ucitaj sejv, hodaj i okreći kameru bar 30 sekundi, pa izadji normalno.
-8. Posalji mi iz foldera igre samo:
-   - MafiaFsrDraw.log
-   - MafiaF8_loader.log
+JEDNA INSTALACIJA:
+1. Ugasi Mafia III.
+2. Raspakuj celu v10 ZIP arhivu u poseban folder.
+3. Pokreni "Instaliraj ili Nadogradi v10.cmd".
+4. Unesi folder gde je mafia3definitiveedition.exe.
+5. Ako je v9 vec instaliran, potvrdi V10. Menja se samo
+   mafia_fsr_gamepass.dll; ostali DLL-ovi ostaju netaknuti.
+   Ako je ranija F8 beta: potvrdi V9.
+   Ako je cist originalni Modern Tweaks: potvrdi TEST.
+   Skripta automatski bira odgovarajuci metod i proverava SHA256.
+6. Pokreni Mafia III preko Steama, ucitaj sejv i igraj/okreci kameru
+   bar 30 sekundi, pa normalno izadji.
 
-Ako MafiaFsrDraw.log NASTANE, novi fullscreen DX11 Draw presretac radi.
-U njemu trazimo [Fullscreen Draw6], HDR t0, TAA history t1,
-kodirani motion t2, RTV0 i dostupnu depth teksturu.
-To nam govori gde da vezemo stvarni FSR, ali samo po sebi ne dokazuje
-da FSR zaista radi.
+ZA ANALIZU: posalji MafiaFsrDraw.log i MafiaF8_loader.log.
+Nije potrebno slati prethodne v5–v9 logove ponovo.
 
-Ako igra nece da se pokrene ili se slika pokvari, zatvori je i
-pokreni "Vrati originalni mod.cmd" iz ovog ZIP-a. Skripta proverava
-rezervnu kopiju pre restauracije. Ne brisi nasumicno druge DLL-ove.
-Ako skripta ne uspe, postoji originalni
-"dinput8.ModernTweaks.2.5.1.bak" u folderu igre, koji moze
-rucno da se kopira nazad kao dinput8.dll dok je igra potpuno zatvorena.
+AKO IMA PROBLEMA: ugasi igru i pokreni "Vrati originalni mod.cmd" iz
+raspakovanog foldera; originalna kopija je
+dinput8.ModernTweaks.2.5.1.bak u folderu igre.
+Ako uninstaller ne uspe, sacuvaj sve DLL-ove pre rucnog vracanja.
 
-TEHNICKI:
-- dinput8.dll = nas mali DInput proxy, prosledjuje originalni mod.
-- ModernTweaks_original.dll = tvoja prethodna originalna kopija
-  (skripta je pravi; NE nalazi se u ovom ZIP-u).
-- mafia_f8_experimental.dll = prosiruje postojeci F8 antialiasing izbor.
-- mafia_fsr_gamepass.dll = verzijski zakljucano presretanje Draw(6,0);
-  potvrđuje SHA-256 originalnog moda pre instalacije u memoriju.
-- mafia_live_fsr_backend.dll = realni AMD FSR backend, ali bez proverenog
-  izvora raw motion/depth/jitter NE MOZE se ukljuciti.
-- mafia_taa_trace.dll = stariji dijagnosticki modul, po defaultu iskljucen.
-
-Originalni autorov dinput8.dll se NE distribuira u ovom ZIP-u.
-Provera radi samo za originalni Modern Tweaks 2.5.1 SHA256:
+Proverava se iskljucivo originalni Modern Tweaks 2.5.1 SHA256:
 529b16daec59e2ce5c735e5c8e7974662b647591da2847c53a16f165a479e900
 
-POSTENO O OGRANICENJIMA:
-Windows CI proverava kompajliranje, testove i skripte, ali ne moze da
-pokrene Mafia III. Novi DirectDraw presretac jos nije potvrđen u igri;
-moze da izazove pad. Puna obrada frejmova i FSR u F8 meniju nisu gotovi.
-Nema razloga da isprobavas ovaj ZIP ako ocekujes odmah veci FPS;
-on je test integracije za sledeci razvojni korak.
+OVO NIJE PREVIEW SA VECIM FPS-OM. FSR renderer je delimično
+implementiran, ali u igri i dalje nedostaju tacni motion vectors,
+depth, kamera/jitter i proveren izlaz pre HUD-a. Bez tih podataka
+FSR opcije ne smeju da se aktiviraju.
+
+Ako zelis samo da igras, ostani na originalnom Modern Tweaks-u.
