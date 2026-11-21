@@ -45,6 +45,8 @@ void* relay = nullptr;
 std::atomic<int> desiredMode{0}; // 0=original, 3=FSR Native AA; others are not ready.
 std::atomic<bool> installed{false};
 std::atomic<bool> inGameFramePresented{false};
+std::atomic<bool> shadowGameFrameVerified{false};
+std::atomic<bool> validOutputHandoff{false};
 std::atomic<bool> backend4Ready{false};
 std::atomic<bool> temporalValidated{false};
 std::atomic<std::uint64_t> executedCalls{0};
@@ -53,6 +55,7 @@ std::filesystem::path logPath;
 HMODULE backendDll = nullptr;
 BackendCreate create = nullptr;
 BackendProcess process = nullptr;
+BackendProcess preview = nullptr;
 BackendDestroy destroy = nullptr;
 BackendProvider provider = nullptr;
 void* session = nullptr;
@@ -149,10 +152,9 @@ void STDMETHODCALLTYPE onDraw(ID3D11DeviceContext* ctx,UINT vertices,UINT first)
     if(!forward)return;
     ++executedCalls;
 
-    if(desiredMode.load(std::memory_order_relaxed)!=3 ||
-        !backend4Ready.load(std::memory_order_acquire) ||
+    if(!backend4Ready.load(std::memory_order_acquire) ||
         !temporalValidated.load(std::memory_order_acquire) ||
-        !process || !session) {
+        !process || !preview || !session) {
         forward(ctx,vertices,first);
         return;
     }
@@ -170,20 +172,35 @@ void STDMETHODCALLTYPE onDraw(ID3D11DeviceContext* ctx,UINT vertices,UINT first)
     // This producer DOES NOT EXIST YET in the current game plugin.
     // Never silently substitute t2 (encoded game motion) for raw vectors.
     bool replaced = false;
+    bool previewSucceeded = false;
     {
         std::lock_guard<std::mutex> lock(gate);
         if(current.pending && current.verifiedTaaShader.Get()==ps.Get() &&
            current.rawDepth && current.rawMotion &&
            current.camera.size==sizeof(MafiaFsrCameraV1) &&
            current.evidence.size==sizeof(MafiaFsrFrameEvidenceV1)) {
-            replaced=process(session,ctx,scene.Get(),current.rawDepth.Get(),
-                current.rawMotion.Get(),output.Get(),&current.evidence,&current.camera)!=0;
+            const bool active = desiredMode.load(std::memory_order_acquire)==3
+                && shadowGameFrameVerified.load(std::memory_order_acquire);
+            MafiaFsrCameraV1 parameters = current.camera;
+            // Reset temporal history on the first visible FSR frame.
+            if(active && !inGameFramePresented.load())parameters.resetHistory=1;
+            const auto dispatch=active?process:preview;
+            const bool ok=dispatch(session,ctx,scene.Get(),current.rawDepth.Get(),
+                current.rawMotion.Get(),output.Get(),&current.evidence,&parameters)!=0;
+            replaced=active && ok;
+            previewSucceeded=!active && ok;
             current.pending=false; // never dispatch twice for the same frame.
         }
     }
+    if(previewSucceeded) {
+        // The AMD GPU has now processed an ACTUAL game frame without writing
+        // to the game. Its matching pre-HUD target was validated.
+        shadowGameFrameVerified.store(true,std::memory_order_release);
+        validOutputHandoff.store(true,std::memory_order_release);
+    }
     if(replaced) {
         inGameFramePresented.store(true,std::memory_order_release);
-        return; // Only a successfully written pre-HUD FSR result may replace Draw.
+        return; // Only a successful pre-HUD FSR result may replace Draw.
     }
     forward(ctx,vertices,first);
 }
@@ -200,6 +217,8 @@ extern "C" __declspec(dllexport) void __cdecl MafiaFsrGetEvidenceV1(
     out->gameFrameDispatchSucceeded=inGameFramePresented.load(std::memory_order_acquire);
     out->outputPresentedInGame=inGameFramePresented.load(std::memory_order_acquire);
     out->lowerResolution3DVerified=false; // native AA only
+    out->shadowGameFrameDispatchSucceeded=shadowGameFrameVerified.load(std::memory_order_acquire);
+    out->outputHandoffValidated=validOutputHandoff.load(std::memory_order_acquire);
 }
 
 extern "C" __declspec(dllexport) void __cdecl MafiaFsrSetModeV1(int mode) {
@@ -255,9 +274,10 @@ extern "C" __declspec(dllexport) BOOL __cdecl MafiaFsrConfigureBackendV1(
     if(!backendDll) {log("Real-frame backend DLL not found; original TAA preserved");return FALSE;}
     create=reinterpret_cast<BackendCreate>(GetProcAddress(backendDll,"MafiaFsrCreateV1"));
     process=reinterpret_cast<BackendProcess>(GetProcAddress(backendDll,"MafiaFsrProcessNativeAaV1"));
+    preview=reinterpret_cast<BackendProcess>(GetProcAddress(backendDll,"MafiaFsrPreviewNativeAaV1"));
     destroy=reinterpret_cast<BackendDestroy>(GetProcAddress(backendDll,"MafiaFsrDestroyV1"));
     provider=reinterpret_cast<BackendProvider>(GetProcAddress(backendDll,"MafiaFsrProviderV1"));
-    if(!create || !process || !destroy || !provider) {
+    if(!create || !process || !preview || !destroy || !provider) {
         log("Incomplete FSR backend exports; original TAA preserved");return FALSE;
     }
     void* newSession=nullptr;
