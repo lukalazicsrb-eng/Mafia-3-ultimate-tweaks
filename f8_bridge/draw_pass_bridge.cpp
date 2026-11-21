@@ -21,6 +21,8 @@
 #include <limits>
 #include <mutex>
 #include <string>
+#include <sstream>
+#include <utility>
 
 #include "../probe/live_fsr_api.h"
 #include "menu_state.h"
@@ -50,6 +52,12 @@ std::atomic<bool> validOutputHandoff{false};
 std::atomic<bool> backend4Ready{false};
 std::atomic<bool> temporalValidated{false};
 std::atomic<std::uint64_t> executedCalls{0};
+std::atomic<std::uint64_t> draw6Calls{0};
+std::atomic<std::uint64_t> candidateCount{0};
+std::atomic<std::uint64_t> traceLines{0};
+// Always diagnostic only until a verified raw-motion/depth/camera producer exists.
+// The log must never make the renderer claim AMD FSR is active.
+std::atomic<bool> fullscreenTraceEnabled{false};
 std::mutex gate;
 std::filesystem::path logPath;
 HMODULE backendDll = nullptr;
@@ -123,6 +131,109 @@ void* nearRelay(std::uintptr_t address) {
     }
     return nullptr;
 }
+struct ResourceDescription {
+    UINT width = 0, height = 0, resourceFormat = 0, viewFormat = 0;
+    bool valid = false;
+};
+ResourceDescription resourceDescription(ID3D11Resource* resource) {
+    if(!resource)return {};
+    ComPtr<ID3D11Texture2D> texture;
+    if(FAILED(resource->QueryInterface(IID_PPV_ARGS(&texture))))return {};
+    D3D11_TEXTURE2D_DESC d{};
+    texture->GetDesc(&d);
+    return {d.Width,d.Height,static_cast<UINT>(d.Format),0,true};
+}
+ResourceDescription describeView(ID3D11ShaderResourceView* view) {
+    if(!view)return {};
+    D3D11_SHADER_RESOURCE_VIEW_DESC v{};
+    view->GetDesc(&v);
+    ComPtr<ID3D11Resource> resource;
+    view->GetResource(&resource);
+    auto result=resourceDescription(resource.Get());
+    result.viewFormat=static_cast<UINT>(v.Format);
+    return result;
+}
+ResourceDescription describeView(ID3D11RenderTargetView* view) {
+    if(!view)return {};
+    D3D11_RENDER_TARGET_VIEW_DESC v{};
+    view->GetDesc(&v);
+    ComPtr<ID3D11Resource> resource;
+    view->GetResource(&resource);
+    auto result=resourceDescription(resource.Get());
+    result.viewFormat=static_cast<UINT>(v.Format);
+    return result;
+}
+ResourceDescription describeView(ID3D11DepthStencilView* view) {
+    if(!view)return {};
+    D3D11_DEPTH_STENCIL_VIEW_DESC v{};
+    view->GetDesc(&v);
+    ComPtr<ID3D11Resource> resource;
+    view->GetResource(&resource);
+    auto result=resourceDescription(resource.Get());
+    result.viewFormat=static_cast<UINT>(v.Format);
+    return result;
+}
+std::string describe(const char* name,const ResourceDescription& r) {
+    std::ostringstream s;
+    s<<name<<'=';
+    if(!r.valid)s<<"missing";
+    else s<<r.width<<'x'<<r.height<<":fmt="<<r.resourceFormat<<":view="<<r.viewFormat;
+    return s.str();
+}
+void traceFullscreenDraw(ID3D11DeviceContext* ctx,UINT vertices,UINT first) {
+    if(!fullscreenTraceEnabled.load(std::memory_order_relaxed))return;
+    const auto count=executedCalls.load(std::memory_order_relaxed);
+    if(count==1 || count==256 || count==4096) {
+        log("[Draw hook reached] total="+std::to_string(count)
+           +" Draw6="+std::to_string(draw6Calls.load())
+           +" candidates="+std::to_string(candidateCount.load()));
+    }
+    if(!ctx || vertices!=6 || first!=0)return;
+    const auto n=++draw6Calls;
+    // This is bounded to a small number of real D3D11 reads. It is
+    // independent of the previously unsuccessful DrawIndexed matcher.
+    if(n>4096 || (n>256 && n%16!=0))return;
+    ID3D11ShaderResourceView* srvs[3]{};
+    ComPtr<ID3D11PixelShader> shader;
+    ComPtr<ID3D11RenderTargetView> output;
+    ComPtr<ID3D11DepthStencilView> depth;
+    ctx->PSGetShader(&shader,nullptr,nullptr);
+    ctx->PSGetShaderResources(0,3,srvs);
+    ctx->OMGetRenderTargets(1,&output,&depth);
+    ResourceDescription inputs[3]{};
+    for(int i=0;i<3;++i) {
+        inputs[i]=describeView(srvs[i]);
+        if(srvs[i])srvs[i]->Release();
+    }
+    const auto rt=describeView(output.Get());
+    const auto ds=describeView(depth.Get());
+    const bool colorMatch=inputs[0].valid && inputs[0].resourceFormat==DXGI_FORMAT_R11G11B10_FLOAT
+       && rt.valid && rt.resourceFormat==DXGI_FORMAT_R11G11B10_FLOAT
+       && inputs[0].width==rt.width && inputs[0].height==rt.height;
+    const bool motionLike=inputs[2].valid
+        && inputs[2].resourceFormat==DXGI_FORMAT_R16G16B16A16_FLOAT
+        && inputs[2].width==rt.width && inputs[2].height==rt.height;
+    const bool historyLike=inputs[1].valid
+        && inputs[1].resourceFormat==DXGI_FORMAT_R11G11B10_FLOAT
+        && inputs[1].width==rt.width && inputs[1].height==rt.height;
+    const bool strictCandidate=colorMatch && historyLike && motionLike;
+    const auto hit=strictCandidate ? ++candidateCount : 0;
+    // First samples show caller ordering; later log only promising
+    // signatures, for no more than 20 candidate lines.
+    const bool shouldLog=n<=24 || (strictCandidate && hit<=20)
+        || n==256 || n==1024 || n==4096;
+    if(!shouldLog)return;
+    if(++traceLines>70)return;
+    std::ostringstream s;
+    s<<"[Fullscreen Draw6 "<<n<<"] shader=0x"<<std::hex
+     <<reinterpret_cast<std::uintptr_t>(shader.Get())<<std::dec
+     <<" strictTaaCandidate="<<(strictCandidate?1:0)
+     <<" "<<describe("t0",inputs[0])<<" "<<describe("t1",inputs[1])
+     <<" "<<describe("t2",inputs[2])<<" "<<describe("RTV0",rt)
+     <<" "<<describe("DSV",ds);
+    log(s.str());
+}
+
 bool readOnlySignature(ID3D11DeviceContext* ctx, UINT vertices, UINT first,
                        ComPtr<ID3D11ShaderResourceView>& scene,
                        ComPtr<ID3D11RenderTargetView>& output,
@@ -151,6 +262,8 @@ void STDMETHODCALLTYPE onDraw(ID3D11DeviceContext* ctx,UINT vertices,UINT first)
     auto forward=originalDraw;
     if(!forward)return;
     ++executedCalls;
+    // Read-only trace is independent of live FSR readiness.
+    traceFullscreenDraw(ctx,vertices,first);
 
     if(!backend4Ready.load(std::memory_order_acquire) ||
         !temporalValidated.load(std::memory_order_acquire) ||
@@ -293,6 +406,19 @@ extern "C" __declspec(dllexport) BOOL __cdecl MafiaFsrConfigureBackendV1(
     return TRUE;
 }
 
+extern "C" __declspec(dllexport) void __cdecl MafiaFsrEnableDrawTraceV1(int enabled) {
+    fullscreenTraceEnabled.store(enabled!=0,std::memory_order_release);
+}
+
+extern "C" __declspec(dllexport) void __cdecl MafiaFsrReportTraceV1() {
+    log("[End summary] draws="+std::to_string(executedCalls.load())
+        +" Draw6="+std::to_string(draw6Calls.load())
+        +" strictTaaCandidates="+std::to_string(candidateCount.load())
+        +" backendReady="+std::to_string(static_cast<int>(backend4Ready.load()))
+        +" shadowFSR="+std::to_string(static_cast<int>(shadowGameFrameVerified.load()))
+        +" FSRPresented="+std::to_string(static_cast<int>(inGameFramePresented.load())));
+}
+
 extern "C" __declspec(dllexport) BOOL __cdecl MafiaFsrInstallDrawHookV1(HMODULE originalMod) {
     if(!originalMod || installed.load() || !exactOriginal(originalMod))return FALSE;
     auto base=reinterpret_cast<unsigned char*>(originalMod);
@@ -327,6 +453,8 @@ extern "C" __declspec(dllexport) BOOL __cdecl MafiaFsrInstallDrawHookV1(HMODULE 
     {std::ofstream clear(logPath,std::ios::trunc);}
     log("Fullscreen Draw callback v1: exact mod hash and original call verified.");
     log("No actual FSR activated until trusted producer supplies depth, motion and camera.");
+    log("Fullscreen tracing is available via MafiaFsrEnableDrawTraceV1.");
+    log("Candidate shader identity/texture descriptors are NOT proof of valid FSR inputs.");
     DWORD before=0;
     if(!VirtualProtect(site,6,PAGE_EXECUTE_READWRITE,&before)) {
         originalDraw=nullptr;
