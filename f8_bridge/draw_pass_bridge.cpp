@@ -189,7 +189,7 @@ std::string describe(const char* name,const ResourceDescription& r) {
 std::atomic<std::uint64_t> draw3Calls{0},draw4Calls{0},drawOtherCalls{0};
 std::mutex shaderTraceMutex;
 std::unordered_set<std::uintptr_t> observedShaderPointers;
-std::atomic<unsigned> totalLogged{0}, hdrLogged{0};
+std::atomic<unsigned> totalLogged{0}, hdrLogged{0}, uniqueShaderCount{0};
 
 std::atomic<std::uint64_t>& categoryCounter(UINT vertices) {
     if(vertices==3)return draw3Calls;
@@ -212,7 +212,7 @@ void traceFullscreenDraw(ID3D11DeviceContext* ctx,UINT vertices,UINT first) {
         +" Other="+std::to_string(drawOtherCalls.load())
             +" DrawOther="+std::to_string(drawOtherCalls.load())
             +" HDRCandidates="+std::to_string(candidateCount.load())
-            +" shaders="+std::to_string(observedShaderPointers.size()));
+            +" shaders="+std::to_string(uniqueShaderCount.load()));
     }
     if(!ctx || first!=0)return;
     // Keep this sampling bounded and avoid perturbing in-game frame timings.
@@ -244,6 +244,7 @@ void traceFullscreenDraw(ID3D11DeviceContext* ctx,UINT vertices,UINT first) {
         const auto insert=observedShaderPointers.insert(shaderPtr);
         newShader=insert.second;
         uniqueShaders=static_cast<unsigned>(observedShaderPointers.size());
+        uniqueShaderCount.store(uniqueShaders,std::memory_order_release);
     }
     const bool hdrColor = input[0].valid
         && (input[0].viewFormat==DXGI_FORMAT_R11G11B10_FLOAT
@@ -255,14 +256,14 @@ void traceFullscreenDraw(ID3D11DeviceContext* ctx,UINT vertices,UINT first) {
         && input[0].width==rt.width && input[0].height==rt.height;
     const bool hdrCandidate=hdrColor && hdrOutput && matchingDimensions;
     if(hdrCandidate) ++candidateCount;
-    const auto logOrdinal=++traceLines;
     // Include normal examples, new shaders and every 8th HDR candidate.
     // 96 lines total to avoid giant logs and per-frame disk writes.
     const bool interesting=(sequence<=8)
         || (newShader && uniqueShaders<=40)
         || (hdrCandidate && hdrLogged.load()<32)
         || (sequence==256 || sequence==1024 || sequence==8192);
-    if(!interesting || logOrdinal>96)return;
+    if(!interesting)return;
+    if(++traceLines>96)return;
     if(hdrCandidate)++hdrLogged;
     ++totalLogged;
     std::ostringstream line;
