@@ -47,7 +47,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: MafiaIII-F8-TAA-Trace-v5-Win64-NO-FSR
+          name: MafiaIII-F8-TAA-Trace-v6-Win64-NO-FSR
           path: package/*
           if-no-files-found: error
           retention-days: 14
