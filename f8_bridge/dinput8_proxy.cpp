@@ -8,11 +8,18 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include "menu_state.h"
 
 namespace {
 using DInputFactory = HRESULT (WINAPI*)(HINSTANCE, DWORD, REFIID, LPVOID*, LPUNKNOWN);
 using F8Installer = BOOL (__cdecl*)(HMODULE);
 using TraceInstaller = BOOL (__cdecl*)(HMODULE);
+using FsrTraceInstaller = BOOL (__cdecl*)(HMODULE);
+using EnableDrawTrace = void (__cdecl*)(int);
+using GetEvidence = void (__cdecl*)(mafiafsr::BackendEvidence*);
+using SetMode = void (__cdecl*)(int);
+using RegisterEvidence = void (__cdecl*)(GetEvidence);
+using RegisterMode = void (__cdecl*)(SetMode);
 
 HINSTANCE self = nullptr;
 INIT_ONCE once = INIT_ONCE_STATIC_INIT;
@@ -20,6 +27,7 @@ HMODULE original = nullptr;
 HMODULE systemInput = nullptr;
 HMODULE extension = nullptr;
 HMODULE taaProbe = nullptr;
+HMODULE fsrGamepass = nullptr;
 DInputFactory forwardTo = nullptr;
 
 std::filesystem::path ownFolder() {
@@ -49,9 +57,37 @@ bool flagEnabled(const std::filesystem::path& folder, const char* flag) {
     return false;
 }
 
+DWORD WINAPI gamepassWorker(LPVOID) {
+    const auto folder=ownFolder();
+    if(!fsrGamepass || !original)return 0;
+    const auto install=reinterpret_cast<FsrTraceInstaller>(
+        GetProcAddress(fsrGamepass,"MafiaFsrInstallDrawHookV1"));
+    const auto enableTrace=reinterpret_cast<EnableDrawTrace>(
+        GetProcAddress(fsrGamepass,"MafiaFsrEnableDrawTraceV1"));
+    if(!install || !enableTrace) {
+        report(folder,"Gamepass exports missing; keeping original DirectX Draw");
+        return 0;
+    }
+    // Modern Tweaks fills its original Draw function pointer on the game's
+    // D3D11 hook initialization, after this proxy starts. Never block the
+    // DirectInput8Create or Steam startup thread while waiting for it.
+    for (int retry=0; retry<90; ++retry) {
+        if(install(original)) {
+            enableTrace(1); // bounded read-only fullscreen Draw diagnostics
+            report(folder,"DirectDraw probe INSTALLED; check MafiaFsrDraw.log");
+            return 0;
+        }
+        if (retry==0 || retry==20 || retry==60)
+            report(folder,"DirectDraw probe waiting for game's D3D11 initialization");
+        Sleep(1000);
+    }
+    report(folder,"DirectDraw probe did not install within 90s. Game can still run with original TAA.");
+    return 0;
+}
+
 BOOL CALLBACK initialize(PINIT_ONCE, PVOID, PVOID*) {
     const auto folder = ownFolder();
-    report(folder, "=== Mafia III experimental F8 loader (NO in-game FSR) ===");
+    report(folder, "=== Mafia III v9 F8 + DirectDraw probe (FSR not active) ===");
     if (folder.empty()) return TRUE;
 
     auto modFile = folder / "ModernTweaks_original.dll";
@@ -112,6 +148,35 @@ BOOL CALLBACK initialize(PINIT_ONCE, PVOID, PVOID*) {
         }
     } else {
         report(folder, "TAA probe disabled by configuration (no tracing)");
+    }
+    if (original && flagEnabled(folder, "EnableFsrDrawTrace=1")) {
+        fsrGamepass=loadFrom(folder/"mafia_fsr_gamepass.dll");
+        if(!fsrGamepass) {
+            report(folder,"FSR Draw probe DLL load failed. Win32 error "+std::to_string(GetLastError()));
+        } else {
+            // The F8 menu remains unchanged until in-game output is genuinely
+            // processed. No fake FSR functionality in this installer.
+            auto registerEvidence=reinterpret_cast<RegisterEvidence>(
+                extension ? GetProcAddress(extension,"RegisterFsrEvidenceCallback"):nullptr);
+            auto registerMode=reinterpret_cast<RegisterMode>(
+                extension ? GetProcAddress(extension,"RegisterFsrModeCallback"):nullptr);
+            auto evidence=reinterpret_cast<GetEvidence>(
+                GetProcAddress(fsrGamepass,"MafiaFsrGetEvidenceV1"));
+            auto mode=reinterpret_cast<SetMode>(
+                GetProcAddress(fsrGamepass,"MafiaFsrSetModeV1"));
+            if(registerEvidence && registerMode && evidence && mode) {
+                registerEvidence(evidence);
+                registerMode(mode);
+                report(folder,"F8 menu connected to FSR runtime telemetry (FSR not yet available)");
+            } else {
+                report(folder,"Runtime telemetry not connected; F8 defaults to unavailable FSR");
+            }
+            HANDLE thread=CreateThread(nullptr,0,gamepassWorker,nullptr,0,nullptr);
+            if(thread) CloseHandle(thread);
+            else report(folder,"Could not start delayed DirectDraw probe worker");
+        }
+    } else {
+        report(folder,"DirectDraw probe disabled by configuration");
     }
     report(folder, forwardTo ? "DirectInput forwarding available" : "DirectInput forwarding MISSING");
     return TRUE;
