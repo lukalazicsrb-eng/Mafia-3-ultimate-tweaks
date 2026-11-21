@@ -20,6 +20,11 @@ if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
     target_link_libraries(mafia_f8_experimental PRIVATE mafia_menu_state bcrypt)
     target_compile_definitions(mafia_f8_experimental PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 
+    # Read-only TAA input probe. No AMD upscaling or texture writes.
+    add_library(mafia_taa_trace SHARED taa_trace.cpp)
+    target_compile_features(mafia_taa_trace PRIVATE cxx_std_17)
+    target_link_libraries(mafia_taa_trace PRIVATE bcrypt d3d11 dxgi)
+
     # The only DLL that replaces the original on an explicitly opt-in beta install.
     add_library(mafia_input_proxy SHARED dinput8_proxy.cpp)
     set_target_properties(mafia_input_proxy PROPERTIES OUTPUT_NAME "dinput8")
