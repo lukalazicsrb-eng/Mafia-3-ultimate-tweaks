@@ -1,38 +1,42 @@
-MAFIA III – TAA DIJAGNOSTIKA V6 (Windows x64)
+MAFIA III – TAA DIJAGNOSTIKA V7 (Windows x64)
 
-OVO NIJE UKLJUCEN FSR! V6 belezi prve TAA hook pozive; ne dira sliku i ne
-pokrece AMD FSR u igri. FSR opcije u F8 i dalje su [unavailable].
+VAZNO: Ovo je samo FSR razvojna dijagnostika, ne gotov FSR u igri.
+Tvoja ranija F8 integracija je vec uspesno testirana. Nije potreban novi
+test sada. Mozes ostati na originalnom Modern Tweaks-u i nastaviti da igras.
 
-AKO IMAS INSTALIRANU V5 TAA DIJAGNOSTIKU:
-1. Potpuno ugasi Mafia III.
-2. Raspakuj novi ZIP u poseban folder.
-3. Pokreni "Nadogradi TAA v6.cmd".
-4. Unesi putanju foldera igre i potvrdi sa V6. Skripta proverava da je
-   prethodni TAA DLL bas originalni V5 i menja samo njega.
-5. Pokreni Mafia III preko STEAMA (NE direktno preko EXE).
-6. F8 -> Visuals -> Anti-aliasing: izaberi "Game's TAA".
-7. Ucitaj sejv, hodaj i okreci kameru 30-60 sekundi, pa izadji normalno.
-8. Posalji MafiaTaaTrace.log i MafiaF8_loader.log iz foldera igre.
+STA JE POPRAVLJENO
+V5/V6 presretali su rezervnu DrawIndexed putanju RVA 0x796ED.
+Disasembliranje ORIGINALNOG Modern Tweaks 2.5.1 DLL-a potvrdilo je da
+aktivna direktna putanja poziva istu TAA matcher funkciju preko RVA 0x799D6.
+V7 prati ovu direktnu putanju i belezi prve pozive i uzorke. Ni V7 ne
+menja GPU teksture i ne pokrece AMD FSR u igri.
 
-AKO IMAS SAMO V4.1 F8 BETA:
-Pokreni "Nadogradi TAA v6.cmd"; pozvace instalaciju dijagnostike,
-uz proveru postojecih DLL-ova. Ako skripta prijavi da postoje nepoznati
-fajlovi, NE brisi ih naslepo.
+KADA ZELIS DA TESTIRAS NOVI KOD:
+Ako je jos instaliran v5 ili v6 dijagnosticki mod:
+  1. Ugasi Mafia III.
+  2. Raspakuj ovaj ZIP u poseban folder, ne u samu igru.
+  3. Pokreni "Nadogradi TAA v7.cmd" i unesi putanju do foldera igre.
+  4. Ako su fajlovi prepoznati, potvrdi V7.
+  5. Pokreni Mafia III preko Steam-a.
+  6. F8 -> Visuals -> Anti-aliasing = Game's TAA.
+  7. Ucitaj sejv, okreci kameru oko 30 sekundi, izadji normalno.
+  8. Posalji MafiaTaaTrace.log i MafiaF8_loader.log.
 
-AKO SI VRATIO ORIGINALNI MOD:
-Pokreni "Instaliraj beta test.cmd", potvrdi TEST i onda testiraj kao gore.
+Ako si vratio originalni Modern Tweaks:
+  1. Koristi "Instaliraj beta test.cmd" samo ako izricito zelis novi beta test.
+  2. Skripta pravi rezervnu kopiju pre zamene i proverava SHA-256.
 
 KAKO VRATITI ORIGINAL:
-Ugasi Mafiju, zatim pokreni "Vrati originalni mod.cmd".
-Skripta proverava verzije i koristi rezervnu kopiju originalnog moda.
-Ako to ne radi, uz ugasenu igru rucno vrati fajl
-dinput8.ModernTweaks.2.5.1.bak na ime dinput8.dll uz sacuvanu kopiju.
+Pokreni "Vrati originalni mod.cmd" tek kada je igra ugasena.
+U folderu igre postoji i originalna rezerva
+dinput8.ModernTweaks.2.5.1.bak.
+Ne brisi nepoznate DLL-ove niti menjaj Steam fajlove nasumicno.
 
-TUMACENJE LOGA:
-- [Hook reached]: poziv do naseg presretaca zaista je izvrsen.
-- [Draw6 sample]: uhvaceni parametri iz igre; format je samo kandidat,
-  nije dokaz da je potpuno validiran za AMD FSR.
-- Samo pocetne 4-5 poruke: hook nije prijavio draw tokom testa;
-  treba proveriti igru / TAA postavku / drugu tacku dijagnostike.
-- Svi logovi se otvaraju kao nov zapis za svaku v6 sesiju.
-Ne ukljucuj ovo kao trajni mod za igranje.
+MafiaTaaTrace.log:
+  [Hook reached] = izveden poziv presretaca
+  [DrawIndexed(6,0) sample] = format i dimenzije kandidata za TAA prolaz
+  [Summary] = ograniceni brojac poziva i rezultata
+
+NIJE IMPLEMENTIRANO: FSR na stvarnim frejmovima, Native AA u igri,
+FSR Quality/Balanced/Performance, interna promena rezolucije. Zato su
+FSR opcije i dalje [unavailable].
