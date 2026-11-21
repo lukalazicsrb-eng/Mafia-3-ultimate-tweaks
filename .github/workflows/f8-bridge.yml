@@ -37,15 +37,17 @@ jobs:
           New-Item -ItemType Directory -Force package | Out-Null
           Copy-Item build-f8/Release/dinput8.dll package/dinput8.dll
           Copy-Item build-f8/Release/mafia_f8_experimental.dll package/mafia_f8_experimental.dll
+          Copy-Item build-f8/Release/mafia_taa_trace.dll package/mafia_taa_trace.dll
           Copy-Item f8_bridge/beta/* package/
           Copy-Item f8_bridge/README.md package/F8_SOURCE_README.md
           Get-FileHash package/dinput8.dll -Algorithm SHA256
           Get-FileHash package/mafia_f8_experimental.dll -Algorithm SHA256
+          Get-FileHash package/mafia_taa_trace.dll -Algorithm SHA256
       - name: Upload experimental Windows beta ZIP (NO FSR GAMEPLAY)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: F8-Experimental-Menu-Beta-Win64-NO-FSR
+          name: MafiaIII-F8-TAA-Trace-v5-Win64-NO-FSR
           path: package/*
           if-no-files-found: error
           retention-days: 14
