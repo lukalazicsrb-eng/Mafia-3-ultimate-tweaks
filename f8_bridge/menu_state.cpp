@@ -3,8 +3,9 @@ namespace mafiafsr {
 bool modeAvailable(Mode mode, const BackendEvidence& evidence) {
     if (static_cast<unsigned>(mode) <= 2u) return true;
     const bool nativeReady = evidence.providerIs412 && evidence.dx11Dx12BridgeReady
-        && evidence.temporalInputsValidated && evidence.gameFrameDispatchSucceeded
-        && evidence.outputPresentedInGame;
+        && evidence.temporalInputsValidated
+        && ((evidence.gameFrameDispatchSucceeded && evidence.outputPresentedInGame)
+            || (evidence.shadowGameFrameDispatchSucceeded && evidence.outputHandoffValidated));
     return nativeReady && (mode == Mode::NativeAa || evidence.lowerResolution3DVerified);
 }
 Choices makeChoices(const BackendEvidence& evidence) {
