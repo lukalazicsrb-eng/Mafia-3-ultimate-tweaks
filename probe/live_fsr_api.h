@@ -1,5 +1,14 @@
 #pragma once
 #include <stdint.h>
+
+// The DLL exports the backend ABI; consumers import it (or resolve it with
+// GetProcAddress). Avoid accidentally exporting unresolved symbols from
+// future DirectX hook modules.
+#ifdef MAFIA_FSR_BACKEND_BUILD
+#define MAFIA_FSR_API __declspec(dllexport)
+#else
+#define MAFIA_FSR_API __declspec(dllimport)
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,14 +50,14 @@ typedef struct MafiaFsrCameraV1 {
 } MafiaFsrCameraV1;
 
 // Return 1 on success, 0 on failure. No exceptions cross this ABI.
-__declspec(dllexport) int __cdecl MafiaFsrCreateV1(
+MAFIA_FSR_API int __cdecl MafiaFsrCreateV1(
     struct ID3D11Device* gameDevice,
     const wchar_t* fullPathToAmdSignedBinDirectory,
     uint32_t renderWidth,
     uint32_t renderHeight,
     void** outSession);
 
-__declspec(dllexport) int __cdecl MafiaFsrProcessNativeAaV1(
+MAFIA_FSR_API int __cdecl MafiaFsrProcessNativeAaV1(
     void* session,
     struct ID3D11DeviceContext* gameImmediateContext,
     struct ID3D11ShaderResourceView* preTaaColor,
@@ -58,9 +67,9 @@ __declspec(dllexport) int __cdecl MafiaFsrProcessNativeAaV1(
     const MafiaFsrFrameEvidenceV1* evidence,
     const MafiaFsrCameraV1* camera);
 
-__declspec(dllexport) const char* __cdecl MafiaFsrProviderV1(void* session);
-__declspec(dllexport) const char* __cdecl MafiaFsrLastErrorV1(void* session);
-__declspec(dllexport) void __cdecl MafiaFsrDestroyV1(void* session);
+MAFIA_FSR_API const char* __cdecl MafiaFsrProviderV1(void* session);
+MAFIA_FSR_API const char* __cdecl MafiaFsrLastErrorV1(void* session);
+MAFIA_FSR_API void __cdecl MafiaFsrDestroyV1(void* session);
 
 #ifdef __cplusplus
 }
