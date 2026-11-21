@@ -8,7 +8,7 @@ $manifest=Join-Path $GameDir 'MafiaF8_install.json'
 if(Test-Path -LiteralPath $manifest -PathType Leaf) {
   $previous=Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
   $gamepass=Join-Path $GameDir 'mafia_fsr_gamepass.dll'
-  if($previous.installVersion -eq 'v9' -and (Test-Path -LiteralPath $gamepass)) {
+  if((Test-Path -LiteralPath $gamepass -PathType Leaf) -and ($null -eq $previous.installVersion -or $previous.installVersion -eq 'v9')) {
     & (Join-Path $PSScriptRoot 'upgrade_draw_v10.ps1') -GameDir $GameDir
   } else {
     # Older F8 beta, no gamepass installed yet.
