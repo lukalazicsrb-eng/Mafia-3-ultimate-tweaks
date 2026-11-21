@@ -19,6 +19,17 @@ target_include_directories(fsr-interop-probe SYSTEM PRIVATE
     "${fsr_kit}/api/include" "${fsr_kit}/upscalers/include")
 target_link_libraries(fsr-interop-probe PRIVATE d3d11 d3d12 d3dcompiler dxgi)
 
+# Real-frame AMD backend DLL, *not* an injection mod or F8 renderer yet.
+add_library(mafia_live_fsr_backend SHARED
+    live_fsr_api.cpp live_fsr_bridge.cpp fsr_session.cpp game_fixture.cpp)
+target_compile_features(mafia_live_fsr_backend PRIVATE cxx_std_17)
+target_compile_definitions(mafia_live_fsr_backend PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_include_directories(mafia_live_fsr_backend SYSTEM PRIVATE
+    "${fsr_kit}/api/include" "${fsr_kit}/upscalers/include")
+target_link_libraries(mafia_live_fsr_backend PRIVATE d3d11 d3d12 d3dcompiler dxgi)
+set_target_properties(mafia_live_fsr_backend PROPERTIES OUTPUT_NAME mafia_live_fsr_backend)
+
+
 if(MSVC)
     set_property(TARGET fsr-interop-probe PROPERTY MSVC_RUNTIME_LIBRARY
         "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -28,5 +39,5 @@ elseif(MINGW)
     target_link_options(fsr-interop-probe PRIVATE -municode -static)
 endif()
 
-install(TARGETS fsr-interop-probe RUNTIME DESTINATION .)
-install(FILES "Pokreni FSR test.cmd" "Proveri formate Mafia III.cmd" run-probe.ps1 PROCITAJ.txt DESTINATION .)
+install(TARGETS fsr-interop-probe mafia_live_fsr_backend RUNTIME DESTINATION .)
+install(FILES "Pokreni FSR test.cmd" "Proveri formate Mafia III.cmd" run-probe.ps1 PROCITAJ.txt live_fsr_api.h LIVE_BACKEND_README.md DESTINATION .)
