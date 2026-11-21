@@ -12,12 +12,14 @@
 namespace {
 using DInputFactory = HRESULT (WINAPI*)(HINSTANCE, DWORD, REFIID, LPVOID*, LPUNKNOWN);
 using F8Installer = BOOL (__cdecl*)(HMODULE);
+using TraceInstaller = BOOL (__cdecl*)(HMODULE);
 
 HINSTANCE self = nullptr;
 INIT_ONCE once = INIT_ONCE_STATIC_INIT;
 HMODULE original = nullptr;
 HMODULE systemInput = nullptr;
 HMODULE extension = nullptr;
+HMODULE taaProbe = nullptr;
 DInputFactory forwardTo = nullptr;
 
 std::filesystem::path ownFolder() {
@@ -39,11 +41,11 @@ HMODULE loadFrom(const std::filesystem::path& file) {
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
 }
 
-bool betaEnabled(const std::filesystem::path& folder) {
+bool flagEnabled(const std::filesystem::path& folder, const char* flag) {
     std::ifstream file(folder / "MafiaF8_test.ini");
     std::string line;
     while (std::getline(file, line))
-        if (line == "EnableExperimentalF8=1") return true;
+        if (line == flag) return true;
     return false;
 }
 
@@ -77,7 +79,7 @@ BOOL CALLBACK initialize(PINIT_ONCE, PVOID, PVOID*) {
         }
     }
 
-    if (original && betaEnabled(folder)) {
+    if (original && flagEnabled(folder, "EnableExperimentalF8=1")) {
         extension = loadFrom(folder / "mafia_f8_experimental.dll");
         if (!extension) {
             report(folder, "F8 adapter DLL load failed. Win32 error "
@@ -93,6 +95,23 @@ BOOL CALLBACK initialize(PINIT_ONCE, PVOID, PVOID*) {
         }
     } else {
         report(folder, "F8 beta disabled or Modern Tweaks missing; menu unchanged");
+    }
+
+    if (original && flagEnabled(folder, "EnableTaaTrace=1")) {
+        taaProbe = loadFrom(folder / "mafia_taa_trace.dll");
+        if (!taaProbe) {
+            report(folder, "TAA probe load failed, Win32 error " + std::to_string(GetLastError()));
+        } else {
+            auto install = reinterpret_cast<TraceInstaller>(
+                GetProcAddress(taaProbe, "InstallTaaTrace"));
+            if (install && install(original)) {
+                report(folder, "TAA read-only probe installed (check MafiaTaaTrace.log)");
+            } else {
+                report(folder, "TAA probe refused its hook; original TAA rendering untouched");
+            }
+        }
+    } else {
+        report(folder, "TAA probe disabled by configuration (no tracing)");
     }
     report(folder, forwardTo ? "DirectInput forwarding available" : "DirectInput forwarding MISSING");
     return TRUE;
