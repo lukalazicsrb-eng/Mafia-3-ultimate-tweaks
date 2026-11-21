@@ -23,7 +23,7 @@ target_link_libraries(fsr-interop-probe PRIVATE d3d11 d3d12 d3dcompiler dxgi)
 add_library(mafia_live_fsr_backend SHARED
     live_fsr_api.cpp live_fsr_bridge.cpp fsr_session.cpp game_fixture.cpp)
 target_compile_features(mafia_live_fsr_backend PRIVATE cxx_std_17)
-target_compile_definitions(mafia_live_fsr_backend PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_definitions(mafia_live_fsr_backend PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX MAFIA_FSR_BACKEND_BUILD)
 target_include_directories(mafia_live_fsr_backend SYSTEM PRIVATE
     "${fsr_kit}/api/include" "${fsr_kit}/upscalers/include")
 target_link_libraries(mafia_live_fsr_backend PRIVATE d3d11 d3d12 d3dcompiler dxgi)
