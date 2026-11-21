@@ -43,6 +43,18 @@ jobs:
           Get-FileHash package/dinput8.dll -Algorithm SHA256
           Get-FileHash package/mafia_f8_experimental.dll -Algorithm SHA256
           Get-FileHash package/mafia_taa_trace.dll -Algorithm SHA256
+      - name: Upload gamepass integration DLL (source-level developer build ONLY)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mafia-DirectDraw-FSR-Bridge-Dev-x64-NOT-INSTALLABLE
+          path: |
+            build-f8/Release/mafia_fsr_gamepass.dll
+            build-f8/Release/test_fsr_gamepass_guard.exe
+            f8_bridge/menu_state.h
+            probe/live_fsr_api.h
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload experimental Windows beta ZIP (NO FSR GAMEPLAY)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
