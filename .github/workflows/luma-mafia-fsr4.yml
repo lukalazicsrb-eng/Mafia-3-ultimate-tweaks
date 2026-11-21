@@ -1,0 +1,111 @@
+name: Build real FSR 4.1.2 for Mafia III (Luma temporal pipeline)
+on:
+  push:
+    paths:
+      - "luma_fsr4/**"
+      - ".github/workflows/luma-mafia-fsr4.yml"
+  workflow_dispatch:
+jobs:
+  build-fsr4:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout package scripts
+        uses: actions/checkout@v4
+        with:
+          path: project
+      - name: Checkout Luma source with game-specific TAA/depth/motion integration
+        uses: actions/checkout@v4
+        with:
+          repository: Filoppi/Luma-Framework
+          ref: 30c4045a47edc1a175646bd8a0e18b89778f91e5
+          path: luma
+          submodules: recursive
+          persist-credentials: false
+      - name: Checkout official AMD SDK 2.4 signed FSR 4.1.2 binaries
+        uses: actions/checkout@v4
+        with:
+          repository: GPUOpen-LibrariesAndSDKs/FidelityFX-SDK
+          ref: 7539ae8b6568ad29ed78a753404351daf3b5cca7
+          path: amd
+          sparse-checkout: |
+            Kits/FidelityFX/signedbin
+            Kits/FidelityFX/docs/license.md
+          persist-credentials: false
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.1.2
+      - name: Enable FSR4 in actual Mafia III source and build addon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $proj = 'luma/Source/Games/Mafia III/Mafia III.vcxproj'
+          $source = Get-Content -LiteralPath $proj -Raw
+          $needle = '<UseLumaNGX>true</UseLumaNGX>'
+          if (-not $source.Contains($needle)) { throw "Luma Mafia III project changed; refusing modification." }
+          $enabled = $needle + [Environment]::NewLine + '    <UseLumaFSR>true</UseLumaFSR>' + [Environment]::NewLine + '    <UseLumaFSR4>true</UseLumaFSR4>'
+          $source = $source.Replace($needle, $enabled)
+          Set-Content -LiteralPath $proj -Encoding UTF8 -Value $source
+          if (-not $source.Contains('<UseLumaFSR4>true</UseLumaFSR4>')) { throw 'FSR4 property missing' }
+          Push-Location luma
+          try {
+            @{ solution=@{ path='Luma.sln'; projects=@('Source/Games/Mafia III/Mafia III.vcxproj') } } |
+              ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 Luma.slnf
+            msbuild Luma.slnf /m /p:Configuration=Publishing-Release /p:Platform=x64 /p:DefineConstants=REMOTE_BUILD=1 /verbosity:minimal
+            if ($LASTEXITCODE -ne 0) { throw "FSR4 Mafia III build failed, exit $LASTEXITCODE" }
+          } finally {
+            Pop-Location
+          }
+      - name: Package rebuilt FSR4 addon, upstream Luma ReShade, official AMD runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release='https://github.com/Filoppi/Luma-Framework/releases/download/latest-840/Luma-Mafia_III.zip'
+          curl.exe -L -f --retry 4 --retry-delay 3 -o luma_upstream.zip $release
+          if ($LASTEXITCODE -ne 0) { throw 'Could not obtain upstream Luma Mafia III archive' }
+          New-Item -ItemType Directory -Force -Path stage | Out-Null
+          Expand-Archive -LiteralPath luma_upstream.zip -DestinationPath stage -Force
+          $addons=@(Get-ChildItem -LiteralPath luma/Binaries -File -Recurse -Filter '*.addon' |
+            Where-Object { $_.Name -eq 'Luma-Mafia III.addon' })
+          if ($addons.Count -ne 1) { throw "Expected 1 new Mafia III addon, got $($addons.Count)" }
+          $dest='stage/Luma-Mafia III.addon'
+          if (-not (Test-Path -LiteralPath $dest)) { throw 'Official base Mafia III addon absent from release ZIP' }
+          $original=(Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash
+          Copy-Item -LiteralPath $addons[0].FullName -Destination $dest -Force
+          $rebuilt=(Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash
+          if ($original -eq $rebuilt) { throw 'Addon unchanged: FSR4 build not installed' }
+          foreach ($name in @('amd_fidelityfx_loader_dx12.dll','amd_fidelityfx_upscaler_dx12.dll')) {
+            $from=Join-Path amd/Kits/FidelityFX/signedbin $name
+            if (-not (Test-Path -LiteralPath $from)) { throw "Missing signed AMD SDK2.4 DLL: $name" }
+            Copy-Item -LiteralPath $from -Destination (Join-Path stage $name) -Force
+          }
+          New-Item -ItemType Directory -Force stage/Licenses | Out-Null
+          Copy-Item luma/LICENSE.md stage/Licenses/Luma-Framework-LICENSE.md
+          Copy-Item amd/Kits/FidelityFX/docs/license.md stage/Licenses/AMD-FidelityFX-LICENSE.md
+          foreach ($name in @('INSTALACIJA.txt','install.ps1','uninstall.ps1','Instaliraj FSR4.cmd','Vrati pre instalacije.cmd')) {
+            Copy-Item -LiteralPath (Join-Path project/luma_fsr4 $name) -Destination (Join-Path stage $name)
+          }
+          $manifest=@{
+            lumaCommit='30c4045a47edc1a175646bd8a0e18b89778f91e5'
+            amdSdkCommit='7539ae8b6568ad29ed78a753404351daf3b5cca7'
+            originalLumaAddonSha256=$original
+            fsr4AddonSha256=$rebuilt
+            amdUpcalerSha256=(Get-FileHash -LiteralPath stage/amd_fidelityfx_upscaler_dx12.dll -Algorithm SHA256).Hash
+            note='Build verified; Mafia III in-game operation and coexistence with Modern Tweaks unverified.'
+          }
+          $manifest | ConvertTo-Json | Set-Content -LiteralPath stage/BUILD-MANIFEST.json -Encoding UTF8
+          if (-not (Test-Path -LiteralPath stage/dxgi.dll)) { throw 'ReShade dxgi.dll is missing' }
+          if (-not (Test-Path -LiteralPath 'stage/Luma/Mafia III' -PathType Container)) { throw 'Mafia III shaders missing' }
+          foreach ($script in @('stage/install.ps1','stage/uninstall.ps1')) {
+            $tokens=$null; $errs=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script).Path,[ref]$tokens,[ref]$errs)
+            if ($errs.Count) { throw "Invalid PowerShell: $script - $($errs -join '; ')" }
+          }
+          Compress-Archive -Path stage/* -DestinationPath MafiaIII_Luma_FSR4_1_2_Experimental.zip -Force
+          Get-FileHash MafiaIII_Luma_FSR4_1_2_Experimental.zip -Algorithm SHA256
+      - name: Upload rebuilt FSR4 enabled Mafia III addon (gameplay unverified)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MafiaIII-Luma-FSR4.1.2-experimental-Win64
+          path: MafiaIII_Luma_FSR4_1_2_Experimental.zip
+          if-no-files-found: error
+          retention-days: 30
